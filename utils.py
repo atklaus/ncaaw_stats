@@ -9,6 +9,7 @@ import re
 import lxml.html
 import importlib
 import json
+import fuzzywuzzy
 
 os.chdir('/Users/adamklaus/Documents/Personal/Develop/ncaaw_stats')
 import constants as cs

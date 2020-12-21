@@ -74,27 +74,32 @@ class HerHoops:
         self.web_dict = web_dict
 
     
-    def get_player_url(self, find_team):
+    def get_all_player_url(self, find_team):
         """
         will need to check if player url is already in dict
         """
         web_dict = self.web_dict
+
         web_dict['Players'] = {}
         for team in web_dict['Teams'].keys():
-            for season in web_dict['Teams'][team][]
-            # print(team)
-            web_dict['Teams'][team] = {'Home':teams_dict[team]}
+            for season in web_dict['Teams'][team].keys():
+                if season != 'Home':
+                    season_url = cs.HOME_URL + web_dict['Teams'][team][season]
+                    page_html = utils.get_html(s, season_url)
+                    url_dict = utils.get_url_dict(page_html)
+                    season_df = get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
+                    season_df['url'] = season_df['Player'].map(url_dict)
+                    player_dict = dict(zip(season_df['Player'],season_df['url']))
 
+                for player in player_dict.keys():
+                    if player not in web_dict['Players'].items():
+                        # web_dict['P'][team] = {'Home':teams_dict[team]}
+                        web_dict['Players'].update({player: player_dict[player]})
 
-        web_dict = self.web_dict
-        team_url = cs.HOME_URL + web_dict['Teams'][team]['Home']
-        page_html = utils.get_html(self._s, team_url)
-        url_dict = utils.get_url_dict(page_html)
-        team_page_df = pd.read_html(str(page_html))[0]
-        team_page_df['url'] = team_page_df['season'].map(url_dict)
-        season_dict = dict(zip(team_page_df['season'],team_page_df['url']))
         return season_dict
 
+
+s=utils.login()
 
 
 
@@ -185,8 +190,8 @@ table_df[0]
 
 
 #Write dictionary to json
-def writeDictToJson(recode_dict,filepath):
-    js = json.dumps(recode_dict)
+def writeDictToJson(write_dict,filepath):
+    js = json.dumps(write_dict)
     # Open new json file if not exist it will create
     fp = open(filepath, 'a')
     # write to json file
@@ -194,33 +199,12 @@ def writeDictToJson(recode_dict,filepath):
     # close the connection
     fp.close()
 
+
 def readJsonDict(filepath):
     with open(filepath) as f:
         recode_dict = json.load(f)
+
     recode_dict = recode_dict
-    return recode_dict
-
-def convertKeystoInt(recode_dict):
-
-    recode_keys = list(recode_dict.keys())
-
-    #Create a dictionary of dictionary with the value recoding for each question
-    for key in recode_keys:
-        numeric_values = recode_dict[key].keys()
-        choice_text = recode_dict[key].values()
-
-        if len(numeric_values) < 20:
-            try:
-                numeric_values = list(map(int, numeric_values))
-            except:
-                print(key + ' cannot be an int')
-            recode_dict[key] = dict(zip(numeric_values, choice_text))
-
-    return recode_dict
-
-def readConvertJson(filepath):
-    recode_dict = readJsonDict(filepath)
-    recode_dict = convertKeystoInt(recode_dict)
     return recode_dict
 
 
