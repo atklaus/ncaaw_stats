@@ -6,93 +6,113 @@ import html5lib
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
-import requests
 import lxml.html as lh
 import importlib
+import json
 
-
-os.chdir('/Users/adamklaus/Documents/Personal/Develop/herhoopstats')
-
+os.chdir('/Users/adamklaus/Documents/Personal/Develop/ncaaw_stats')
 import constants as cs
+import utils
 
-
-### Here, we're getting the login page and then grabbing hidden form
-### fields.  We're probably also getting several session cookies too.
-
-def login():
-    s = requests.session()
-    login = s.get(cs.LOGIN_URL)
-    login_html = lxml.html.fromstring(login.text)
-    hidden_inputs = login_html.xpath(r'//form//input[@type="hidden"]')
-    form = {x.attrib["name"]: x.attrib["value"] for x in hidden_inputs}
-    print(form)
-    # {'csrftok': '9e34ca7e492a0dda743369433e78ccf10c1e68bbb1f453cbb80ce6eaeeebe928', 
-    #  'context': ''}
-    
-    form['email'] = 'atklaus@wisc.edu'
-    form['password'] = 'Cubswin(11)!'
-    response = s.post(cs.LOGIN_URL, data=form, headers = dict(referer=cs.LOGIN_URL))
-    return s
-
-
-def get_table_by_elm_text(page_html, find_text, element, class_name):
-
-    table_df = None
-    div_class = page_html.findAll('div',class_=class_name)
-
-    for div in div_class:
-        try:
-            if find_text in div.find(element).text:
-                get_div = div
-                table_df = pd.read_html(str(get_div))
-        except:
-            print('Element does not exist in this div')
-
-    if table_df == None:
-        print('WARNING: No data in return df')
-
-    return table_df[0]
-
-
-
-def get_url_dict(page_html):
-    '''
-    Create a dictionary of all links and their text reference
-    '''
-    href = page_html.find_all('a')
-    href_dict = {}
-    for item in href:
-        try:
-            href_dict[item.text.strip()] = item['href']
-        except:
-            pass
-    
-    return href_dict
-
-
-def add_url_col(df, href_dict, col):
-    for index, key in enumerate(df[col]):
-        df.loc[index, 'url'] = href_dict[key] 
-
-
-    return df
-
-
-s = login()
-
-# url = 'https://herhoopstats.com/stats/ncaa/team/2021/natl/northwestern-wildcats-womens-basketball-stats-11e8e149-c9f6-64de-af82-12df17ae4e1e/'
-
+importlib.reload(utils)
 importlib.reload(cs)
 
-soup = BeautifulSoup(response.text, 'lxml')
-schedule = page_html.find_all(id='schedule')
+class HerHoops:
+    """
+    The primary focus of this class is to create a dictionary of dictionaries contains all of the necessary urls
+    to pull any team/player data from a given page
+    """
+    def __init__(self):
+        self._s = utils.login()
+        self.get_teams_url()
+        self.create_master_dict()
+        self.get_all_teams_seasons_url()
+
+    def get_teams_url(self):
+        """
+        get urls for all teams from the herhoopsstats rankings page
+        """
+        page_html = utils.get_html(self._s, cs.TEAMS_URL)
+        team_df = pd.read_html(str(page_html))[0] #Find way to determine this without index
+        href_dict = get_url_dict(page_html)
+        team_df['url'] = team_df['Team'].map(href_dict)
+        self.teams_dict = dict(zip(team_df['Team'],team_df['url']))
+
+    def create_master_dict(self):
+        """
+        create a dictionary of all urls
+        """
+        web_dict = {}
+        web_dict['Teams'] = {}
+        for team in teams_dict.keys():
+            # print(team)
+            web_dict['Teams'][team] = {'Home':teams_dict[team]}
+        self.web_dict = web_dict
+
+    def get_team_season_url(self, find_team):
+        """
+        create a dictionary for a given team for a given season
+        """
+        web_dict = self.web_dict
+        team_url = cs.HOME_URL + web_dict['Teams'][team]['Home']
+        page_html = utils.get_html(self._s, team_url)
+        url_dict = utils.get_url_dict(page_html)
+        team_page_df = pd.read_html(str(page_html))[0]
+        team_page_df['url'] = team_page_df['season'].map(url_dict)
+        season_dict = dict(zip(team_page_df['season'],team_page_df['url']))
+        return season_dict
+
+    def get_all_teams_seasons_url(self):
+        """
+        add a link to each season from each team
+        """
+        for team in web_dict['Teams'].keys():
+            season_dict = self.get_team_season_url(team)
+            for season in season_dict.keys():
+                web_dict['Teams'][team][season] = season_dict[season]
+
+        self.web_dict = web_dict
+
+    
+    def get_player_url(self, find_team):
+        """
+        will need to check if player url is already in dict
+        """
+        web_dict = self.web_dict
+        web_dict['Players'] = {}
+        for team in web_dict['Teams'].keys():
+            for season in web_dict['Teams'][team][]
+            # print(team)
+            web_dict['Teams'][team] = {'Home':teams_dict[team]}
+
+
+        web_dict = self.web_dict
+        team_url = cs.HOME_URL + web_dict['Teams'][team]['Home']
+        page_html = utils.get_html(self._s, team_url)
+        url_dict = utils.get_url_dict(page_html)
+        team_page_df = pd.read_html(str(page_html))[0]
+        team_page_df['url'] = team_page_df['season'].map(url_dict)
+        season_dict = dict(zip(team_page_df['season'],team_page_df['url']))
+        return season_dict
+
+
+
+
+
+season = list(season_dict.keys())[0]
+
+urlObj = HerHoops()
+teams_dict = urlObj.teams_dict
+teams_dict.keys()
+team = list(teams_dict.keys())[89]
+
+web_dict = urlObj.web_dict
+find_team = 'Oregon'
+
+#Create a class, when instantiated, creates a giant dictionary of all the links needed to get to any part of the website
 
 #Teams url
-response = s.get(cs.TEAMS_URL, headers = dict(referer = cs.TEAMS_URL))
-page_html = BeautifulSoup(response.text, 'html5lib')
-team_df = pd.read_html(str(page_html))[0] #Find way to determine this without index
-href_dict = get_url_dict(page_html)
-team_df['url'] = team_df['Team'].map(href_dict)
+
 
 #Team url
 find_team = 'Oregon'
@@ -120,11 +140,22 @@ player_url = cs.HOME_URL + url_dict[find_player]
 response = s.get(player_url, headers = dict(referer = player_url))
 page_html = BeautifulSoup(response.text, 'html5lib')
 url_dict = get_url_dict(page_html)
-player_df = get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
+player_df = get_table_by_elm_text(page_html, 'Per Game', 'h2', 'card mb-3')
+player_totals_df = get_table_by_elm_text(page_html, 'Totals', 'h2', 'card mb-3')
+player_adv_df = get_table_by_elm_text(page_html, 'Advanced', 'h2', 'card mb-3')
+player_val_df = get_table_by_elm_text(page_html, 'Value', 'h2', 'card mb-3')
+player_conf_df = get_table_by_elm_text(page_html, 'Conference Per Game', 'h2', 'card mb-3')
+player_totals_conf_df = get_table_by_elm_text(page_html, 'Conference Totals', 'h2', 'card mb-3')
+player_adv_conf_df = get_table_by_elm_text(page_html, 'Conference Advanced', 'h2', 'card mb-3')
+player_val_conf_df = get_table_by_elm_text(page_html, 'Conference Value', 'h2', 'card mb-3')
 
 
 
-player_totals_df = get_table_by_elm_text(page_html, 'Roster Totals', 'h2', 'card mb-3')
+#MAKE A LIST OF COLUMNS THAT NEED TO BE EXPANDED
+# split_df = player_df['G'].str.split(expand=True)
+# split_df.columns = ['G_' + x for x in ['total','perc','rank']] 
+
+
 
 
 # player = page_html.find_all(id='player_stats')
@@ -151,5 +182,48 @@ get_table_by_elm_text(page_html, text, element, class_name)
 
 
 table_df[0]
+
+
+#Write dictionary to json
+def writeDictToJson(recode_dict,filepath):
+    js = json.dumps(recode_dict)
+    # Open new json file if not exist it will create
+    fp = open(filepath, 'a')
+    # write to json file
+    fp.write(js)
+    # close the connection
+    fp.close()
+
+def readJsonDict(filepath):
+    with open(filepath) as f:
+        recode_dict = json.load(f)
+    recode_dict = recode_dict
+    return recode_dict
+
+def convertKeystoInt(recode_dict):
+
+    recode_keys = list(recode_dict.keys())
+
+    #Create a dictionary of dictionary with the value recoding for each question
+    for key in recode_keys:
+        numeric_values = recode_dict[key].keys()
+        choice_text = recode_dict[key].values()
+
+        if len(numeric_values) < 20:
+            try:
+                numeric_values = list(map(int, numeric_values))
+            except:
+                print(key + ' cannot be an int')
+            recode_dict[key] = dict(zip(numeric_values, choice_text))
+
+    return recode_dict
+
+def readConvertJson(filepath):
+    recode_dict = readJsonDict(filepath)
+    recode_dict = convertKeystoInt(recode_dict)
+    return recode_dict
+
+
+
 
 
