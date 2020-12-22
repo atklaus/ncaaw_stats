@@ -52,7 +52,6 @@ def get_table_by_elm_text(page_html, find_text, element, class_name):
     return table_df[0]
 
 
-
 def get_url_dict(page_html):
     '''
     Create a dictionary of all links and their text reference
@@ -72,5 +71,23 @@ def get_html(session,url):
     page_html = BeautifulSoup(response.text, 'html5lib')
     return page_html
 
+#Write dictionary to json
+def write_dict_to_json(write_dict,filepath):
+    js = json.dumps(write_dict)
+    # Open new json file if not exist it will create
+    fp = open(filepath, 'a')
+    # write to json file
+    fp.write(js)
+    # close the connection
+    fp.close()
 
+
+def read_json(filepath):
+    with open(filepath) as f:
+        read_dict = json.load(f)
+    return read_dict
+
+
+
+# player = page_html.find_all(id='player_stats')
 
