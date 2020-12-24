@@ -28,6 +28,7 @@ def login():
     #  'context': ''}
     form['email'] = cs.CREDS_DICT['username']
     form['password'] = cs.CREDS_DICT['password']
+    form['Connection'] = 'keep-alive'
 
     response = s.post(cs.LOGIN_URL, data=form, headers = dict(referer=cs.LOGIN_URL))
     return s
