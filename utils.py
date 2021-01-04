@@ -12,25 +12,25 @@ import json
 import fuzzywuzzy
 
 os.chdir('/Users/adamklaus/Documents/Personal/Develop/ncaaw_stats')
-import constants as cs
+from constants import LOGIN_URL, HOME_URL, PRO_HOME_URL, NCAA_TEAMS_URL, TABLE_CLASS, CREDS_DICT, PLAYER_INPUT_DICT
 
 def login():
     '''
     returns a session that is logged into herhoopstats.com
     '''
     s = requests.session()
-    login = s.get(cs.LOGIN_URL)
+    login = s.get(LOGIN_URL)
     login_html = lxml.html.fromstring(login.text)
     hidden_inputs = login_html.xpath(r'//form//input[@type="hidden"]') #find any hidden attributes that must be included in the post
     form = {x.attrib["name"]: x.attrib["value"] for x in hidden_inputs}
     print(form)
     # {'csrftok': '9e34ca7e492a0dda743369433e78ccf10c1e68bbb1f453cbb80ce6eaeeebe928', 
     #  'context': ''}
-    form['email'] = cs.CREDS_DICT['username']
-    form['password'] = cs.CREDS_DICT['password']
+    form['email'] = CREDS_DICT['username']
+    form['password'] = CREDS_DICT['password']
     form['Connection'] = 'keep-alive'
 
-    response = s.post(cs.LOGIN_URL, data=form, headers = dict(referer=cs.LOGIN_URL))
+    response = s.post(LOGIN_URL, data=form, headers = dict(referer=LOGIN_URL))
     return s
 
 

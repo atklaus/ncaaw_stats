@@ -12,7 +12,7 @@ import json
 import time
 
 os.chdir('/Users/adamklaus/Documents/Personal/Develop/ncaaw_stats')
-from constants import LOGIN_URL, HOME_URL, TEAMS_URL, TABLE_CLASS, CREDS_DICT, PLAYER_INPUT_DICT
+from constants import LOGIN_URL, HOME_URL, PRO_HOME_URL, NCAA_TEAMS_URL, TABLE_CLASS, CREDS_DICT, PLAYER_INPUT_DICT
 import utils
 
 importlib.reload(utils)
@@ -31,7 +31,8 @@ class HerHoopsData:
         """
         get urls for all teams from the herhoopsstats rankings page
         """
-        page_html = utils.get_html(self._s, TEAMS_URL)
+        page_html = utils.get_html(self._s, NCAA_TEAMS_URL)
+        # utils.get_table_by_elm_text(page_html, find_text)
         team_df = pd.read_html(str(page_html))[0] #Find way to determine this without index
         href_dict = utils.get_url_dict(page_html)
         team_df['url'] = team_df['Team'].map(href_dict)
@@ -135,12 +136,19 @@ class HerHoopsData:
 
         except:
             #If player doesn't have data for this table
+            print(find_player + ' does not have ' + df_name)
             pass
         
 
     def get_player_html(self, find_player):
-        player_url = HOME_URL + self.players_dict[find_player]
-        self.page_html = utils.get_html(self._s, player_url)
+        try:
+            player_url = HOME_URL + self.players_dict[find_player]
+            self.page_html = utils.get_html(self._s, player_url)
+        except:
+            print('WARNING: url issue with ' + player_url)
+            response = self._s.get(player_url)
+            self.page_html = BeautifulSoup(response.text, 'html5lib')
+
 
     def merge_all_player_tables(self, find_player):
         """
@@ -174,14 +182,24 @@ class HerHoopsData:
 statsObj = HerHoopsData()
 players_list = list(statsObj.players_dict.keys())
 players_list.sort()
+players_list = players_list[1941:]
 stats_df = pd.DataFrame()
+count=0
 
 for player in players_list:
+    if count > 250:
+        stats_df.to_csv('ncaa_player_stats_2.csv')
+        count = 0
+
+    count += 1
+
     statsObj.merge_all_player_tables(player)
     stats_df = pd.concat([stats_df, statsObj.player_df], sort=False)
     # statsObj.player_df.to_csv('test.csv')
 
-stats_df.to_csv('ncaa_player_stats.csv')
+
+
+stats_df.head()
 
 
 

@@ -9,8 +9,10 @@ os.chdir(base_path)
 
 LOGIN_URL = 'https://herhoopstats.com/accounts/login/?return_url=/'
 HOME_URL = 'https://herhoopstats.com/'
-TEAMS_URL = 'https://herhoopstats.com/stats/leaderboard/'
+NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/leaderboard/'
 TABLE_CLASS = 'card mb-3'
+
+PRO_HOME_URL = 'https://herhoopstats.com/stats/wnba/research/team_single_seasons/?min_season=2020&max_season=2020&season_type=reg&stats_to_show=summary&submit=true'
 
 
 PLAYER_INPUT_DICT = {
