@@ -8,8 +8,8 @@ base_path = os.path.abspath(os.path.dirname(__file__))
 os.chdir(base_path)
 
 LOGIN_URL = 'https://herhoopstats.com/accounts/login/?return_url=/'
-HOME_URL = 'https://herhoopstats.com/'
-NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/leaderboard/'
+HOME_URL = 'https://herhoopstats.com'
+NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_single_seasons/?min_season=2023&max_season=2023&season_type=reg&submit=true&stats_to_show=per_game&criteria1=pts_per_game&comp1=ge&threshold1=15'
 TABLE_CLASS = 'card mb-3'
 
 PRO_HOME_URL = 'https://herhoopstats.com/stats/wnba/research/team_single_seasons/?min_season=2020&max_season=2020&season_type=reg&stats_to_show=summary&submit=true'
@@ -27,10 +27,19 @@ PLAYER_INPUT_DICT = {
 
 }
 
-#natl vs conf
-with open("creds.txt") as f:
-    for line in f:
-        CREDS_DICT = json.loads(line)
+import json
+  
+# Opening JSON file
+f = open('creds.json')
+  
+# returns JSON object as 
+# a dictionary
+CREDS_DICT = json.load(f)
+
+# #natl vs conf
+# with open("creds.txt") as f:
+#     for line in f:
+#         CREDS_DICT = json.loads(line)
 
 
 

@@ -48,9 +48,9 @@ class HerHoopsData:
         """
         web_dict = {}
         web_dict['Teams'] = {}
-        for team in teams_dict.keys():
+        for team in self.teams_dict.keys():
             # print(team)
-            web_dict['Teams'][team] = {'Home':teams_dict[team]}
+            web_dict['Teams'][team] = {'Home':self.teams_dict[team]}
         self.web_dict = web_dict
 
     def get_team_season_url(self, find_team):
@@ -58,7 +58,7 @@ class HerHoopsData:
         create a dictionary for a given team for a given season
         """
         web_dict = self.web_dict
-        team_url = HOME_URL + web_dict['Teams'][team]['Home']
+        team_url = HOME_URL + web_dict['Teams'][find_team]['Home']
         page_html = utils.get_html(self._s, team_url)
         url_dict = utils.get_url_dict(page_html)
         team_page_df = pd.read_html(str(page_html))[0]
@@ -70,12 +70,12 @@ class HerHoopsData:
         """
         add a link to each season from each team
         """
-        for team in web_dict['Teams'].keys():
+        for team in self.web_dict['Teams'].keys():
             season_dict = self.get_team_season_url(team)
             for season in season_dict.keys():
-                web_dict['Teams'][team][season] = season_dict[season]
+                self.web_dict['Teams'][team][season] = season_dict[season]
 
-        self.web_dict = web_dict
+        self.web_dict = self.web_dict
 
     def get_player_url(self, find_player, player_team):
         s = self._s
@@ -83,7 +83,7 @@ class HerHoopsData:
 
         for season in web_dict['Teams'][player_team].keys():
             if season != 'Home':
-                season_url = HOME_URL + web_dict['Teams'][team]
+                season_url = HOME_URL + web_dict['Teams'][player_team]
                 page_html = utils.get_html(s, season_url)
                 url_dict = utils.get_url_dict(page_html)
 
@@ -95,7 +95,6 @@ class HerHoopsData:
         will need to check if player url is already in dict
         """
         web_dict = self.web_dict
-        players_list = None
 
         web_dict['Players'] = {}
         for team in list(web_dict['Teams'].keys()):
@@ -111,7 +110,7 @@ class HerHoopsData:
 
                         for player in player_dict.keys():
                             if player not in web_dict['Players'].items():
-                                # web_dict['P'][team] = {'Home':teams_dict[team]}
+                                web_dict['P'][team] = {'Home':self.teams_dict[team]}
                                 web_dict['Players'].update({player: player_dict[player]})
             except:
                 print('WARNING: ' + team + ' had error')
@@ -179,7 +178,36 @@ class HerHoopsData:
         return df
 
 
+NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_single_seasons/?division=1&min_season=2023&max_season=2023&games=all&criteria0=pts_per_game&comp0=ge&threshold0=15&stats_to_show=summary&submit=true'
 statsObj = HerHoopsData()
+statsObj.get_teams_url()
+statsObj.create_url_dict()
+statsObj.get_all_player_url()
+statsObj.web_dict['Players']
+
+web_dict = statsObj.web_dict
+
+web_dict['Players'] = {}
+for team in list(web_dict['Teams'].keys()):
+    try:
+        for season in web_dict['Teams'][team].keys():
+            if season != 'Home':
+                season_url = HOME_URL + web_dict['Teams'][team][season]
+                page_html = utils.get_html(s, season_url)
+                url_dict = utils.get_url_dict(page_html)
+                season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
+                season_df['url'] = season_df['Player'].map(url_dict)
+                player_dict = dict(zip(season_df['Player'],season_df['url']))
+
+                for player in player_dict.keys():
+                    if player not in web_dict['Players'].items():
+                        web_dict['P'][team] = {'Home':self.teams_dict[team]}
+                        web_dict['Players'].update({player: player_dict[player]})
+    except:
+        print('WARNING: ' + team + ' had error')
+
+self.web_dict = web_dict
+
 players_list = list(statsObj.players_dict.keys())
 players_list.sort()
 players_list = players_list[1941:]
