@@ -25,12 +25,13 @@ class HerHoopsData:
     def __init__(self):
         self._s = utils.login()
         self.get_teams_url()
-        self.read_url_dict()
+        # self.read_url_dict()
 
     def get_teams_url(self):
         """
         get urls for all teams from the herhoopsstats rankings page
         """
+        NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_total_seasons/?division=1&min_season=2010&max_season=2023&games=all&submit=true'
         page_html = utils.get_html(self._s, NCAA_TEAMS_URL)
         # utils.get_table_by_elm_text(page_html, find_text)
         team_df = pd.read_html(str(page_html))[0] #Find way to determine this without index
@@ -102,7 +103,7 @@ class HerHoopsData:
                 for season in web_dict['Teams'][team].keys():
                     if season != 'Home':
                         season_url = HOME_URL + web_dict['Teams'][team][season]
-                        page_html = utils.get_html(s, season_url)
+                        page_html = utils.get_html(self.s, season_url)
                         url_dict = utils.get_url_dict(page_html)
                         season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
                         season_df['url'] = season_df['Player'].map(url_dict)
@@ -182,10 +183,65 @@ NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_single_seaso
 statsObj = HerHoopsData()
 statsObj.get_teams_url()
 statsObj.create_url_dict()
+statsObj.get_all_teams_seasons_url()
+
+team = 'Iowa Hawkeyes'
+
+
+def get_tables_list(page_html,tables_list,join_key='season'):
+    keep_same = {'season'}
+    tables = pd.read_html(str(page_html))
+    base_df = tables[0]
+
+    for table in tables_list:
+        try:
+            new_df = utils.get_table_by_elm_text(page_html, table, 'h2', 'card mb-3')
+            suffix = '_'+ table.replace(' ','_').lower()
+            new_df.columns = ['{}{}'.format(c, '' if c in keep_same else suffix)for c in new_df.columns]
+            base_df = base_df.merge(new_df,on=join_key,how='left')
+        except:
+            pass
+    return base_df
+
+for team in statsObj.web_dict['Teams'].keys():
+    team_url = HOME_URL + statsObj.web_dict['Teams'][team]['Home']
+    page_html = utils.get_html(statsObj._s, team_url)
+    url_dict = utils.get_url_dict(page_html)
+    tables_list = ['Season Summary Advanced','Per Game','Advanced','NCAA Tournament Summary']
+    team_page_df = get_tables_list(page_html,tables_list,join_key='season')
+    team_page_df['url'] = team_page_df['season'].map(url_dict)
+    team_page_df.to_csv('teams/' + team + '.csv')
+
+    season_dict = dict(zip(team_page_df['season'],team_page_df['url']))
+    season_dict = statsObj.get_team_season_url(team)
+    statsObj.web_dict['Teams'][team]['seasons'] = season_dict
+
+    # for season in season_dict.keys():
+    #     statsObj.web_dict['Teams'][team][season] = season_dict[season]
+
+
+join_key='season'
+
+
 statsObj.get_all_player_url()
+
 statsObj.web_dict['Players']
 
+
+statsObj.get_all_teams_seasons_url()
+
+for team in list(statsObj.web_dict['Teams'].keys())[:1]:
+
+    season_dict = statsObj.get_team_season_url(team)
+    for season in season_dict.keys():
+        statsObj.web_dict['Teams'][team][season] = season_dict[season]
+
+
+
 web_dict = statsObj.web_dict
+
+
+
 
 web_dict['Players'] = {}
 for team in list(web_dict['Teams'].keys()):
@@ -193,7 +249,7 @@ for team in list(web_dict['Teams'].keys()):
         for season in web_dict['Teams'][team].keys():
             if season != 'Home':
                 season_url = HOME_URL + web_dict['Teams'][team][season]
-                page_html = utils.get_html(s, season_url)
+                page_html = utils.get_html(statsObj._s, season_url)
                 url_dict = utils.get_url_dict(page_html)
                 season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
                 season_df['url'] = season_df['Player'].map(url_dict)
@@ -201,10 +257,11 @@ for team in list(web_dict['Teams'].keys()):
 
                 for player in player_dict.keys():
                     if player not in web_dict['Players'].items():
-                        web_dict['P'][team] = {'Home':self.teams_dict[team]}
+                        # web_dict['Players'][team] = {'Home':statsObj.teams_dict[team]}
                         web_dict['Players'].update({player: player_dict[player]})
     except:
         print('WARNING: ' + team + ' had error')
+
 
 self.web_dict = web_dict
 
@@ -228,7 +285,4 @@ for player in players_list:
 
 
 stats_df.head()
-
-
-
 
