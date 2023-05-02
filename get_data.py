@@ -8,8 +8,13 @@ from urllib.parse import urljoin
 import re
 import lxml.html as lh
 import importlib
-import json
-import time
+from dotenv import load_dotenv
+from pathlib import Path
+
+dotenv_path = Path('/Users/adamklaus/.env')
+load_dotenv(dotenv_path=dotenv_path)
+
+
 
 os.chdir('/Users/adamklaus/Documents/Personal/Develop/ncaaw_stats')
 from constants import LOGIN_URL, HOME_URL, PRO_HOME_URL, NCAA_TEAMS_URL, TABLE_CLASS, CREDS_DICT, PLAYER_INPUT_DICT
@@ -31,7 +36,9 @@ class HerHoopsData:
         """
         get urls for all teams from the herhoopsstats rankings page
         """
-        NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_total_seasons/?division=1&min_season=2010&max_season=2023&games=all&submit=true'
+        # NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_total_seasons/?division=1&min_season=2010&max_season=2023&games=all&submit=true'
+        NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_total_games/?division=1&min_season=2010&max_season=2023&result=both&loc_h=1&loc_a=1&loc_n=1&submit=true'
+
         page_html = utils.get_html(self._s, NCAA_TEAMS_URL)
         # utils.get_table_by_elm_text(page_html, find_text)
         team_df = pd.read_html(str(page_html))[0] #Find way to determine this without index
@@ -179,19 +186,19 @@ class HerHoopsData:
         return df
 
 
-NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_single_seasons/?division=1&min_season=2023&max_season=2023&games=all&criteria0=pts_per_game&comp0=ge&threshold0=15&stats_to_show=summary&submit=true'
+# NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_single_seasons/?division=1&min_season=2023&max_season=2023&games=all&criteria0=pts_per_game&comp0=ge&threshold0=15&stats_to_show=summary&submit=true'
 statsObj = HerHoopsData()
 statsObj.get_teams_url()
 statsObj.create_url_dict()
-statsObj.get_all_teams_seasons_url()
 
 team = 'Iowa Hawkeyes'
-
 
 def get_tables_list(page_html,tables_list,join_key='season'):
     keep_same = {'season'}
     tables = pd.read_html(str(page_html))
     base_df = tables[0]
+    suffix = '_'+ table.replace(' ','_').lower()
+    new_df.columns = ['{}{}'.format(c, '' if c in keep_same else suffix)for c in new_df.columns]
 
     for table in tables_list:
         try:
@@ -203,86 +210,106 @@ def get_tables_list(page_html,tables_list,join_key='season'):
             pass
     return base_df
 
-for team in statsObj.web_dict['Teams'].keys():
+teams_list = list(statsObj.web_dict['Teams'].keys())
+teams_list.sort()
+
+for team in teams_list:
     team_url = HOME_URL + statsObj.web_dict['Teams'][team]['Home']
     page_html = utils.get_html(statsObj._s, team_url)
     url_dict = utils.get_url_dict(page_html)
-    tables_list = ['Season Summary Advanced','Per Game','Advanced','NCAA Tournament Summary']
+    tables_list = ['Season Summary Advanced','Per Game','Advanced','Conference Summary','NCAA Tournament Summary']
     team_page_df = get_tables_list(page_html,tables_list,join_key='season')
     team_page_df['url'] = team_page_df['season'].map(url_dict)
+    team_page_df['team_name'] = team
     team_page_df.to_csv('teams/' + team + '.csv')
 
+    #Get all seasons per team
     season_dict = dict(zip(team_page_df['season'],team_page_df['url']))
     season_dict = statsObj.get_team_season_url(team)
+
     statsObj.web_dict['Teams'][team]['seasons'] = season_dict
+
+    #Get all players for a team
+
 
     # for season in season_dict.keys():
     #     statsObj.web_dict['Teams'][team][season] = season_dict[season]
 
 
-join_key='season'
 
-
-statsObj.get_all_player_url()
-
-statsObj.web_dict['Players']
-
-
-statsObj.get_all_teams_seasons_url()
-
-for team in list(statsObj.web_dict['Teams'].keys())[:1]:
-
-    season_dict = statsObj.get_team_season_url(team)
-    for season in season_dict.keys():
-        statsObj.web_dict['Teams'][team][season] = season_dict[season]
-
-
-
-web_dict = statsObj.web_dict
-
-
-
-
-web_dict['Players'] = {}
-for team in list(web_dict['Teams'].keys()):
+statsObj.web_dict['Players'] = {}
+for team in list(statsObj.web_dict['Teams'].keys()):
     try:
-        for season in web_dict['Teams'][team].keys():
-            if season != 'Home':
-                season_url = HOME_URL + web_dict['Teams'][team][season]
-                page_html = utils.get_html(statsObj._s, season_url)
-                url_dict = utils.get_url_dict(page_html)
-                season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
-                season_df['url'] = season_df['Player'].map(url_dict)
-                player_dict = dict(zip(season_df['Player'],season_df['url']))
+        for season in statsObj.web_dict['Teams'][team]['seasons'].keys():
+            season_url = HOME_URL + statsObj.web_dict['Teams'][team]['seasons'][season]
+            page_html = utils.get_html(statsObj._s, season_url)
+            url_dict = utils.get_url_dict(page_html)
+            season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
+            season_df['url'] = season_df['Player'].map(url_dict)
+            season_df['url'] = HOME_URL + season_df['url']
+            player_dict = dict(zip(season_df['Player'],season_df['url']))
 
-                for player in player_dict.keys():
-                    if player not in web_dict['Players'].items():
-                        # web_dict['Players'][team] = {'Home':statsObj.teams_dict[team]}
-                        web_dict['Players'].update({player: player_dict[player]})
+            for player in player_dict.keys():
+                if player not in statsObj.web_dict['Players'].items():
+                    # web_dict['Players'][team] = {'Home':statsObj.teams_dict[team]}
+                    statsObj.web_dict['Players'].update({player: player_dict[player]})
     except:
         print('WARNING: ' + team + ' had error')
 
 
-self.web_dict = web_dict
-
-players_list = list(statsObj.players_dict.keys())
-players_list.sort()
-players_list = players_list[1941:]
-stats_df = pd.DataFrame()
-count=0
-
-for player in players_list:
-    if count > 250:
-        stats_df.to_csv('ncaa_player_stats_2.csv')
-        count = 0
-
-    count += 1
-
-    statsObj.merge_all_player_tables(player)
-    stats_df = pd.concat([stats_df, statsObj.player_df], sort=False)
-    # statsObj.player_df.to_csv('test.csv')
+for player in statsObj.web_dict['Players'].keys():
+    player_url = statsObj.web_dict['Players'][player]
+    page_html = utils.get_html(statsObj._s, player_url)
+    tables_list = ['Advanced','Value','Conference Per Game','Conference Advanced', 'Conference Value']
+    player_page_df = get_tables_list(page_html,tables_list,join_key='season')
+    player_page_df['player_name'] = player
+    player_page_df.to_csv('players/' + player + '.csv')
 
 
+folder_path = 'players/'
+csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
+dfs = []
 
-stats_df.head()
+for csv_file in csv_files:
+    file_path = os.path.join(folder_path, csv_file)
+    df = pd.read_csv(file_path)
+    dfs.append(df)
+
+full_players_df = pd.concat(dfs, axis=0, ignore_index=True)
+
+for col in full_players_df.columns:
+    if '  ' in str(full_players_df[col][0]):
+        full_players_df[col] = full_players_df[col].str.split('  ').str[0]
+        
+    if pd.api.types.is_numeric_dtype(df[col]):
+        full_players_df[col] = full_players_df[col].astype(float)
+
+
+grouped_df = full_players_df.sort_values(by='season', ascending=False).groupby('player_name', as_index=False).first()
+grouped_df = grouped_df[['player_name','team']]
+grouped_df.to_csv('player_bio.csv')
+
+full_players_df.to_csv('all_players.csv')
+
+
+# import os
+# import openai
+# from io import StringIO
+# openai.api_key = os.getenv('OPEN_AI_KEY')
+
+# msg = """
+# Can you add a columns to the following table with filled in information about each of these players hometown, height, weight and whether or not they are in the WNBA that you should be able to get from https://www.basketball-reference.com/ or https://www.sports-reference.com/cbb/? Can you also output as a csv?
+# {}
+# """
+
+# # create a completion
+# completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[{'role':'user',"content": msg.format(grouped_df)}])
+# response_text = completion.choices[0].message.content
+
+# # Process the response text into a pandas DataFrame
+# df = pd.read_csv(StringIO(response_text), delimiter=",")
+# df
+# df.columns
+
+
 

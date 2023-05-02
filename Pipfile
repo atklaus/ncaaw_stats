@@ -11,6 +11,9 @@ html5lib = "*"
 requests = "*"
 fuzzywuzzy = "*"
 herhoopstats = "*"
+openai = "*"
+pydot = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
