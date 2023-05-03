@@ -193,12 +193,10 @@ statsObj.create_url_dict()
 
 team = 'Iowa Hawkeyes'
 
-def get_tables_list(page_html,tables_list,join_key='season'):
-    keep_same = {'season'}
+def get_tables_list(page_html,tables_list,join_key='season',table_num=0):
+    keep_same = {'season','Player'}
     tables = pd.read_html(str(page_html))
-    base_df = tables[0]
-    suffix = '_'+ table.replace(' ','_').lower()
-    new_df.columns = ['{}{}'.format(c, '' if c in keep_same else suffix)for c in new_df.columns]
+    base_df = tables[table_num]
 
     for table in tables_list:
         try:
@@ -209,6 +207,31 @@ def get_tables_list(page_html,tables_list,join_key='season'):
         except:
             pass
     return base_df
+
+
+
+def read_csvs_from_folder(folder_path):
+
+    csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
+    dfs = []
+
+    for csv_file in csv_files:
+        file_path = os.path.join(folder_path, csv_file)
+        df = pd.read_csv(file_path)
+        dfs.append(df)
+
+    final_df = pd.concat(dfs, axis=0, ignore_index=True)
+
+    for col in final_df.columns:
+        if '  ' in str(final_df[col][0]):
+            final_df[col] = final_df[col].str.split('  ').str[0]
+            
+        if pd.api.types.is_numeric_dtype(final_df[col]):
+            final_df[col] = final_df[col].astype(float)
+    
+    return final_df
+
+
 
 teams_list = list(statsObj.web_dict['Teams'].keys())
 teams_list.sort()
@@ -235,60 +258,76 @@ for team in teams_list:
     # for season in season_dict.keys():
     #     statsObj.web_dict['Teams'][team][season] = season_dict[season]
 
+teams_df = read_csvs_from_folder(folder_path='teams/')
+teams_df = teams_df.add_prefix('team_')
+teams_df.sort_values(['team_team_name', 'team_season'], ascending=[True, False],inplace=True)
+teams_df.reset_index(drop=True,inplace=True)
+teams_df.to_csv('all_teams.csv')
 
 
 statsObj.web_dict['Players'] = {}
-for team in list(statsObj.web_dict['Teams'].keys()):
+# for team in list(statsObj.web_dict['Teams'].keys()):
+for index, row in teams_df.iterrows():
     try:
-        for season in statsObj.web_dict['Teams'][team]['seasons'].keys():
-            season_url = HOME_URL + statsObj.web_dict['Teams'][team]['seasons'][season]
-            page_html = utils.get_html(statsObj._s, season_url)
-            url_dict = utils.get_url_dict(page_html)
-            season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
-            season_df['url'] = season_df['Player'].map(url_dict)
-            season_df['url'] = HOME_URL + season_df['url']
-            player_dict = dict(zip(season_df['Player'],season_df['url']))
+        season_url = HOME_URL + row['team_url']
+        page_html = utils.get_html(statsObj._s, season_url)
+        url_dict = utils.get_url_dict(page_html)
+        tables_list = ['Roster Totals','Roster Advanced','Roster Value']
+        season_df = get_tables_list(page_html,tables_list,join_key='Player',table_num=12)
+        season_df['team_name'] = row['team_team_name']
+        season_df.to_csv('seasons/' + row['team_team_name'] + ' ' + row['team_season'] + '.csv')
 
-            for player in player_dict.keys():
-                if player not in statsObj.web_dict['Players'].items():
-                    # web_dict['Players'][team] = {'Home':statsObj.teams_dict[team]}
-                    statsObj.web_dict['Players'].update({player: player_dict[player]})
+        # season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
+        # season_df['url'] = season_df['Player'].map(url_dict)
+        # season_df['url'] = HOME_URL + season_df['url']
+        # player_dict = dict(zip(season_df['Player'],season_df['url']))
+
+        # for player in player_dict.keys():
+        #     if player not in statsObj.web_dict['Players'].items():
+        #         # web_dict['Players'][team] = {'Home':statsObj.teams_dict[team]}
+        #         statsObj.web_dict['Players'].update({player: player_dict[player]})
     except:
         print('WARNING: ' + team + ' had error')
 
+# PULL ALL PLAYERS
+# for player in statsObj.web_dict['Players'].keys():
+#     player_url = statsObj.web_dict['Players'][player]
+#     page_html = utils.get_html(statsObj._s, player_url)
+#     tables_list = ['Advanced','Value','Conference Per Game','Conference Advanced', 'Conference Value']
+#     player_page_df = get_tables_list(page_html,tables_list,join_key='season')
+#     player_page_df['player_name'] = player
+#     player_page_df.to_csv('players/' + player + '.csv')
 
-for player in statsObj.web_dict['Players'].keys():
-    player_url = statsObj.web_dict['Players'][player]
-    page_html = utils.get_html(statsObj._s, player_url)
-    tables_list = ['Advanced','Value','Conference Per Game','Conference Advanced', 'Conference Value']
-    player_page_df = get_tables_list(page_html,tables_list,join_key='season')
-    player_page_df['player_name'] = player
-    player_page_df.to_csv('players/' + player + '.csv')
-
-
-folder_path = 'players/'
+folder_path = 'seasons/'
 csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
 dfs = []
 
 for csv_file in csv_files:
     file_path = os.path.join(folder_path, csv_file)
+    season = csv_file.split(' ')[-1].replace('.csv','')
     df = pd.read_csv(file_path)
+    df['season'] = season
     dfs.append(df)
 
-full_players_df = pd.concat(dfs, axis=0, ignore_index=True)
+final_df = pd.concat(dfs, axis=0, ignore_index=True)
 
-for col in full_players_df.columns:
-    if '  ' in str(full_players_df[col][0]):
-        full_players_df[col] = full_players_df[col].str.split('  ').str[0]
+for col in final_df.columns:
+    if '  ' in str(final_df[col][0]):
+        final_df[col] = final_df[col].str.split('  ').str[0]
         
-    if pd.api.types.is_numeric_dtype(df[col]):
-        full_players_df[col] = full_players_df[col].astype(float)
+    if pd.api.types.is_numeric_dtype(final_df[col]):
+        final_df[col] = final_df[col].astype(float)
 
 
-grouped_df = full_players_df.sort_values(by='season', ascending=False).groupby('player_name', as_index=False).first()
-grouped_df = grouped_df[['player_name','team']]
+# folder_path = 'players/'
+# full_players_df = read_csvs_from_folder(folder_path='seasons/')
+full_players_df = final_df.copy()
+list(full_players_df.columns)
+
+grouped_df = full_players_df.sort_values(by=['season'], ascending=False).groupby(by=['Player','team_name'], as_index=False).first()
+grouped_df = full_players_df.sort_values(by=['season'], ascending=False).groupby(by='Player', as_index=False).first()
+grouped_df = grouped_df[['Player','team_name']]
 grouped_df.to_csv('player_bio.csv')
-
 full_players_df.to_csv('all_players.csv')
 
 
@@ -305,6 +344,26 @@ full_players_df.to_csv('all_players.csv')
 # # create a completion
 # completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[{'role':'user',"content": msg.format(grouped_df)}])
 # response_text = completion.choices[0].message.content
+
+# msg = """
+# Can you output a json object where the key is the initial college name and mascot from the list and the value has the mascot name removed? An example of a key value pair would be 'George Washington Colonials': 'George Washington'
+# {}
+# """
+
+# teams_list
+
+# # create a completion
+# completion = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[{'role':'user',"content": msg.format(teams_list)}])
+# response_text = completion.choices[0].message.content
+
+# import json
+# json.dumps(response_text)
+
+# response_text = response_text.strip()
+# new_team_list = response_text.split(',')
+# new_team_list = [x.strip(' ') for x in new_team_list]
+
+
 
 # # Process the response text into a pandas DataFrame
 # df = pd.read_csv(StringIO(response_text), delimiter=",")

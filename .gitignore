@@ -15,4 +15,6 @@ node_modules
 
 /teams
 /players
+/seasons
 all_players.csv
+all_teams.csv
