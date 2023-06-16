@@ -14,8 +14,6 @@ from pathlib import Path
 dotenv_path = Path('/Users/adamklaus/.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-
-
 os.chdir('/Users/adamklaus/Documents/Personal/Develop/ncaaw_stats')
 from constants import LOGIN_URL, HOME_URL, PRO_HOME_URL, NCAA_TEAMS_URL, TABLE_CLASS, CREDS_DICT, PLAYER_INPUT_DICT
 import utils
@@ -186,6 +184,7 @@ class HerHoopsData:
         return df
 
 
+
 # NCAA_TEAMS_URL = 'https://herhoopstats.com/stats/ncaa/research/team_single_seasons/?division=1&min_season=2023&max_season=2023&games=all&criteria0=pts_per_game&comp0=ge&threshold0=15&stats_to_show=summary&submit=true'
 statsObj = HerHoopsData()
 statsObj.get_teams_url()
@@ -330,6 +329,66 @@ grouped_df = grouped_df[['Player','team_name']]
 grouped_df.to_csv('player_bio.csv')
 full_players_df.to_csv('all_players.csv')
 
+###########
+# WNBA
+###########
+
+WNBA_PLAYERS_URL = 'https://herhoopstats.com/stats/wnba/research/player_total_seasons/?min_season=2008&max_season=2022&season_type=reg&submit=true'
+page_html = utils.get_html(statsObj._s, WNBA_PLAYERS_URL)
+# utils.get_table_by_elm_text(page_html, find_text)
+player_df = pd.read_html(str(page_html))[0] #Find way to determine this without index
+href_dict = utils.get_url_dict(page_html)
+player_df['url'] = player_df['Player'].map(href_dict)
+player_df['url'] = HOME_URL + player_df['url'] 
+
+for index, row in player_df.iterrows():
+    try:
+        page_html = utils.get_html(statsObj._s, row['url'])
+        tables_list = ['Totals','Advanced','Value']
+        base_df = get_tables_list(page_html,tables_list,join_key='season',table_num=0)
+        base_df['player_name'] = row['Player']
+        base_df.to_csv('WNBA/' + row['Player'] + '.csv')
+
+        # season_df = utils.get_table_by_elm_text(page_html, 'Roster Per Game', 'h2', 'card mb-3')
+        # season_df['url'] = season_df['Player'].map(url_dict)
+        # season_df['url'] = HOME_URL + season_df['url']
+        # player_dict = dict(zip(season_df['Player'],season_df['url']))
+
+        # for player in player_dict.keys():
+        #     if player not in statsObj.web_dict['Players'].items():
+        #         # web_dict['Players'][team] = {'Home':statsObj.teams_dict[team]}
+        #         statsObj.web_dict['Players'].update({player: player_dict[player]})
+    except:
+        print('WARNING: ' + row['Player'] + ' had error')
+
+pro_df = read_csvs_from_folder('wnba/')
+
+remove_list = pro_df[(pro_df['season'] == '2009') | (pro_df['season'] == '2008')]['player_name'].unique()
+
+pro_df = pro_df[~pro_df.player_name.isin(remove_list)]
+pro_list = list(pro_df['player_name'].unique())
+full_players_df['player_name'] = full_players_df['Player'].str.split('This HTML5 audio').str[0]
+ncaa_players_list = list(full_players_df['player_name'].unique())
+
+full_players_df[full_players_df['player_name'].isin(pro_list)]['player_name'].unique()
+
+
+from fuzzywuzzy import process
+
+def fuzzy_name_matching(list1, list2, threshold=90):
+    matched_names = {}
+
+    for name in list1:
+        match, match_score = process.extractOne(name, list2)
+
+        if match_score >= threshold:
+            matched_names[name] = match
+            list2.remove(match)
+
+    return matched_names
+
+matched_names = fuzzy_name_matching(pro_list, ncaa_players_list)
+print(matched_names)
 
 # import os
 # import openai

@@ -6,6 +6,7 @@ node_modules
 
 # Ignore all text files
 *.txt
+*.csv
 
 # Ignore files related to API keys
 .env
@@ -14,7 +15,8 @@ node_modules
 .sass-cache
 
 /teams
-/players
-/seasons
+/*players*
+/*seasons*
+/wnba*
 all_players.csv
 all_teams.csv

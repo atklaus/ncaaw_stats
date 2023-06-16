@@ -93,7 +93,7 @@ user_agents = [
 ]
 
 
-proxies = ['47.252.20.42', '137.184.245.154', '169.55.89.6', '167.172.158.85', '35.209.198.222', '191.101.1.116', '75.89.101.60', '141.148.63.29', '75.89.101.62', '206.189.198.123']
+proxies = ['45.119.208.134:80', '20.206.106.192:80', '46.122.0.246:80', '103.77.60.14:80', '3.36.130.175:80', '203.198.207.253:80', '143.244.182.101:80', '20.210.113.32:80', '149.28.25.61:80']
 
 def requst_params(user_agents, available_proxies):    
     user_agent = random.choice(user_agents) 
@@ -101,6 +101,18 @@ def requst_params(user_agents, available_proxies):
     proxy = random.choice(available_proxies) 
     proxies = {'http': 'http://{}'.format(proxy)} 
     return headers, proxies
+
+
+pd.read_html('https://www.sports-reference.com/cbb/schools/#all_NCAAW_schools')
+
+url = BASE_URL.format(letter)
+
+headers, proxy_rand = requst_params(user_agents, available_proxies)
+session = requests.session()
+
+response = session.get(url, headers = headers, proxies=proxy_rand)
+page_html = BeautifulSoup(response.text, 'html5lib')
+url_dict = utils.get_url_dict(page_html)
 
 
 for letter in letters:
