@@ -18,6 +18,7 @@ matplotlib = "*"
 seaborn = "*"
 openpyxl = "*"
 scikit-learn = "*"
+xgboost = "*"
 
 [dev-packages]
 

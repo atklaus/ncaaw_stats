@@ -203,13 +203,15 @@ plt.show()
 # Select only top 17 features based on importance
 X = X[feature_importances.nlargest(12, 'importance').index]
 
+
+# Split the data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
 ####################################
-# CLASSIFICATION: Build Model
+# Random Forest
 ####################################
 
 from sklearn.ensemble import RandomForestClassifier
-# Split the data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Define the model
 model = RandomForestClassifier(random_state=42)
@@ -248,6 +250,56 @@ plt.barh(range(len(indices)), importances[indices], color='b', align='center')
 plt.yticks(range(len(indices)), [X.columns[i] for i in indices])
 plt.xlabel('Relative Importance')
 plt.show()
+
+####################################
+# SVM
+####################################
+
+from sklearn import svm
+from sklearn.model_selection import GridSearchCV
+from sklearn import metrics
+
+# Set up parameter grid for SVM
+param_grid_svm = {'C': [0.1, 1, 10, 100, 1000], 'gamma': [1, 0.1, 0.01, 0.001, 0.0001], 'kernel': ['linear', 'rbf']}
+
+# Create SVM grid search classifier
+grid_svm = GridSearchCV(svm.SVC(), param_grid_svm, refit = True, verbose = 3)
+
+# Fit the model
+grid_svm.fit(X_train, y_train)
+
+# Print best parameters after tuning
+print(grid_svm.best_params_)
+
+# Predict
+grid_predictions_svm = grid_svm.predict(X_test)
+
+# Evaluation
+print("Accuracy SVM:", metrics.accuracy_score(y_test, grid_predictions_svm))
+
+####################################
+# XGBOOST
+####################################
+
+from xgboost import XGBClassifier
+
+# Set up parameter grid for XGBoost
+param_grid_xgb = {'n_estimators': [50, 100, 150, 200], 'learning_rate': [0.01, 0.05, 0.1, 0.3, 0.5], 'max_depth': [3, 5, 7, 9]}
+
+# Create XGBoost grid search classifier
+grid_xgb = GridSearchCV(XGBClassifier(use_label_encoder=False, eval_metric="logloss"), param_grid_xgb, refit = True, verbose = 3)
+
+# Fit the model
+grid_xgb.fit(X_train, y_train)
+
+# Print best parameters after tuning
+print(grid_xgb.best_params_)
+
+# Predict
+grid_predictions_xgb = grid_xgb.predict(X_test)
+
+# Evaluation
+print("Accuracy XGBoost:", metrics.accuracy_score(y_test, grid_predictions_xgb))
 
 
 ####################################
