@@ -23,8 +23,6 @@ load_dotenv(dotenv_path=dotenv_path)
 
 # https://free-proxy-list.net/
 
-BASE_URL = 'https://www.basketball-reference.com/wnba/players/{}/'
-REF_HOME = 'https://www.basketball-reference.com'
 
 proxies = open("proxies.txt", "r").read().strip().split("\n")
 
@@ -58,12 +56,10 @@ def check_proxy(proxy):
 	""" 
  
 	return get("http://httpbin.org/ip", proxy) is not None 
- 
-available_proxies = list(filter(check_proxy, proxies))
 
-proxies = {'http': 'http://{}'} 
-response = requests.get('http://httpbin.org/ip', proxies=proxies) 
-print(response.json()['origin']) # 190.64.18.162
+# https://proxyscrape.com/free-proxy-list 
+# available_proxies = list(filter(check_proxy, proxies))
+available_proxies = open("proxies.txt", "r").read().strip().split("\n")
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 6.3; Win64; x64; Trident/7.0; Touch; MASMJS; rv:11.0) like Gecko",
@@ -93,8 +89,6 @@ user_agents = [
 ]
 
 
-proxies = ['45.119.208.134:80', '20.206.106.192:80', '46.122.0.246:80', '103.77.60.14:80', '3.36.130.175:80', '203.198.207.253:80', '143.244.182.101:80', '20.210.113.32:80', '149.28.25.61:80']
-
 def requst_params(user_agents, available_proxies):    
     user_agent = random.choice(user_agents) 
     headers = {'User-Agent': user_agent} 
@@ -103,40 +97,34 @@ def requst_params(user_agents, available_proxies):
     return headers, proxies
 
 
-pd.read_html('https://www.sports-reference.com/cbb/schools/#all_NCAAW_schools')
+base = 'https://www.sports-reference.com/cbb/players/{}-1.html'
 
-url = BASE_URL.format(letter)
+wnba_df = pd.read_csv('all_wnba_players.csv')
+wnba_df['name_url'] = wnba_df['name'].str.replace(' ',"-")
+wnba_df['name_url'] = wnba_df['name_url'].str.replace("'","")
+wnba_df['name_url'] = wnba_df['name_url'].str.lower()
 
-headers, proxy_rand = requst_params(user_agents, available_proxies)
-session = requests.session()
+# Append the url base to the 'name_url' column and store the result in a new column
+wnba_df['url'] = wnba_df['name_url'].apply(lambda x: base.format(x))
 
-response = session.get(url, headers = headers, proxies=proxy_rand)
-page_html = BeautifulSoup(response.text, 'html5lib')
-url_dict = utils.get_url_dict(page_html)
+player_urls = ['https://www.sports-reference.com/cbb/players/skylar-diggins-1.html','https://www.sports-reference.com/cbb/players/avery-warley-1.html']
 
-
-for letter in letters:
-    url = BASE_URL.format(letter)
+# for player_url in list(wnba_df['url']):
+for player_url in player_urls:
+    import time
+    time.sleep(5)
     session = requests.session()
+    headers, proxy_rand = requst_params(user_agents, available_proxies)
+    response = session.get(player_url, headers = headers, proxies=proxy_rand)
+    # response = session.get(player_url)
+    if response.status_code != 200:
+        print(response.status_code)
+    else:
+        pass
 
-    response = session.get(url, headers = headers, proxies=proxy_rand)
-    page_html = BeautifulSoup(response.text, 'html5lib')
-    url_dict = utils.get_url_dict(page_html)
-
-    player_urls = []
-    for key, value in url_dict.items():
-        if ('/wnba/players/{}/'.format(letter) in value) & ('/wnba/players/{}/'.format(letter) != value):
-            player_urls.append(value)
-
-    for player_url in player_urls:
-        import time
-        time.sleep(5.5)
-        session = requests.session()
-
-        player_url = REF_HOME + player_url
-        headers, proxy_rand = requst_params(user_agents, available_proxies)
-        response = session.get(player_url, headers = headers, proxies=proxy_rand)
+    try:
         page_html = BeautifulSoup(response.text, 'html5lib')
+
         url_dict = utils.get_url_dict(page_html)
         div_class = page_html.findAll('h1')
         player_name = div_class[0].find('span').text
@@ -146,44 +134,62 @@ for letter in letters:
             if 'Advanced' in str(table):
                 player_adv_df = pd.read_html(str(table))[0]
                 player_adv_df = player_adv_df.add_prefix('adv_')
+                break
+        for table in tables:
             if 'Per Game' in str(table):
                 player_pg_df = pd.read_html(str(page_html))[0]
                 player_pg_df = player_pg_df.add_prefix('pg_')
+                break
 
-        base_df = player_pg_df.merge(player_adv_df,how='left',left_on='pg_Year',right_on='adv_Year')
+        base_df = player_pg_df.merge(player_adv_df,how='left',left_on='pg_Season',right_on='adv_Season')
         base_df['player_name'] =player_name
 
-        for key, value in url_dict.items():
-            if 'college=' in value:
-                base_df['college_team'] = key
-
-        base_df.to_csv('wnba_ref/' + player_name + '.csv')
-
-
-BASE_URL = 'https://www.sports-reference.com/'
-team_url = 'https://www.sports-reference.com/cbb/schools/abilene-christian/women/'
+        base_df.to_csv('ncaa_ref/' + player_name + '.csv')
+    except Exception as error:
+    # handle the exception
+        print("ERROR:", error)
 
 
-player_url = REF_HOME + player_url
-response = session.get(team_url, headers = headers)
+# BASE_URL = 'https://www.sports-reference.com/'
+# team_url = 'https://www.sports-reference.com/cbb/schools/abilene-christian/women/'
+
+
+# player_url = REF_HOME + player_url
+# response = session.get(team_url, headers = headers)
+# page_html = BeautifulSoup(response.text, 'html5lib')
+# url_dict = utils.get_url_dict(page_html)
+# team_page_df = pd.read_html(str(page_html),header=1)[0]
+# team_page_df['url'] =BASE_URL + team_page_df['Season'].map(url_dict)
+
+
+# div_class = page_html.findAll('h1')
+# player_name = div_class[0].find('span').text
+
+# tables = page_html.findAll("table")
+# for table in tables:
+#     if 'Advanced' in str(table):
+#         player_adv_df = pd.read_html(str(table))[0]
+#         player_adv_df = player_adv_df.add_prefix('adv_')
+#     if 'Per Game' in str(table):
+#         player_pg_df = pd.read_html(str(page_html))[0]
+#         player_pg_df = player_pg_df.add_prefix('pg_')
+
+
+
+
+url = 'https://www.sports-reference.com/cbb/schools/#all_NCAAW_schools'
+session = requests.session()
+df = pd.read_html(url)
+df = df[1]
+response = session.get(url)
 page_html = BeautifulSoup(response.text, 'html5lib')
-url_dict = utils.get_url_dict(page_html)
-team_page_df = pd.read_html(str(page_html),header=1)[0]
-team_page_df['url'] =BASE_URL + team_page_df['Season'].map(url_dict)
+page_html = str(page_html).split("SRS back to 2001-02")
+w_html = page_html[1]
+w_html = BeautifulSoup(w_html, 'html5lib')
+url_dict = utils.get_url_dict(w_html)
 
-
-
-
-div_class = page_html.findAll('h1')
-player_name = div_class[0].find('span').text
-
-
-
-tables = page_html.findAll("table")
-for table in tables:
-    if 'Advanced' in str(table):
-        player_adv_df = pd.read_html(str(table))[0]
-        player_adv_df = player_adv_df.add_prefix('adv_')
-    if 'Per Game' in str(table):
-        player_pg_df = pd.read_html(str(page_html))[0]
-        player_pg_df = player_pg_df.add_prefix('pg_')
+new_dict = {}
+for key in url_dict.keys():
+    if ('/women/' in url_dict[key]) & ('/cbb/schools/' in url_dict[key]):
+        new_dict[key] = url_dict[key]
+    

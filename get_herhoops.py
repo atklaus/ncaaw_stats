@@ -231,7 +231,6 @@ def read_csvs_from_folder(folder_path):
     return final_df
 
 
-
 teams_list = list(statsObj.web_dict['Teams'].keys())
 teams_list.sort()
 
@@ -308,7 +307,12 @@ for csv_file in csv_files:
     df['season'] = season
     dfs.append(df)
 
+import numpy as np
+
 final_df = pd.concat(dfs, axis=0, ignore_index=True)
+final_df.replace('--',np.nan, inplace=True)
+
+col = 'Player Def Rtg_roster_value'
 
 for col in final_df.columns:
     if '  ' in str(final_df[col][0]):
@@ -316,18 +320,27 @@ for col in final_df.columns:
         
     if pd.api.types.is_numeric_dtype(final_df[col]):
         final_df[col] = final_df[col].astype(float)
+    else:
+        print(col)
 
 
+final_df = final_df.apply(pd.to_numeric, errors='ignore')
+
+pd.to_numeric(final_df['Player Def Rtg_roster_value'],errors='ignore')
 # folder_path = 'players/'
 # full_players_df = read_csvs_from_folder(folder_path='seasons/')
 full_players_df = final_df.copy()
-list(full_players_df.columns)
 
-grouped_df = full_players_df.sort_values(by=['season'], ascending=False).groupby(by=['Player','team_name'], as_index=False).first()
-grouped_df = full_players_df.sort_values(by=['season'], ascending=False).groupby(by='Player', as_index=False).first()
-grouped_df = grouped_df[['Player','team_name']]
+keep_cols = list(final_df.select_dtypes([np.number]).columns) + list(['Player','team_name','season'])
+
+
+grouped_df = full_players_df[keep_cols].groupby(by=['Player','team_name'], as_index=False).max()
+grouped_df = full_players_df.sort_values(by=['Player'], ascending=False).groupby(by='Player', as_index=False).first()
+# grouped_df = grouped_df[['Player','team_name']]
 grouped_df.to_csv('player_bio.csv')
 full_players_df.to_csv('all_players.csv')
+grouped_df.to_csv('ncaa_all_max.csv')
+
 
 ###########
 # WNBA

@@ -160,12 +160,8 @@ team_page_df = pd.read_html(str(page_html),header=1)[0]
 team_page_df['url'] =BASE_URL + team_page_df['Season'].map(url_dict)
 
 
-
-
 div_class = page_html.findAll('h1')
 player_name = div_class[0].find('span').text
-
-
 
 tables = page_html.findAll("table")
 for table in tables:

@@ -15,6 +15,9 @@ openai = "*"
 pydot = "*"
 python-dotenv = "*"
 matplotlib = "*"
+seaborn = "*"
+openpyxl = "*"
+scikit-learn = "*"
 
 [dev-packages]
 
