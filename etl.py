@@ -4,10 +4,12 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import numpy as np
 
 ####################################
 # Clean Data
@@ -80,7 +82,7 @@ for col in non_categorical_cols:
     model_df[col] = pd.to_numeric(model_df[col], errors='coerce')
 numerical_cols = model_df.select_dtypes(include=['float64', 'int64']).columns
 
-model_df.to_excel('test.xlsx')
+model_df.to_excel('model_df.xlsx')
 
 ####################################
 # Impute Missing Values
@@ -141,4 +143,65 @@ plt.show()
 # Normalize Data
 ####################################
 
+# List comprehension to get the column names with 'college_team' prefix
+college_team_cols = [col for col in model_df.columns if col.startswith('college_team')]
 
+# List comprehension to get the column names with 'conference' prefix
+conference_cols = [col for col in model_df.columns if col.startswith('conference')]
+non_norm_cols = college_team_cols + conference_cols
+
+# Separate features and target
+features = model_df.drop(columns=['adv_per_pro'], axis=1)
+target = model_df['adv_per_pro']
+
+# Identify numerical columns which needs to be normalized
+norm_cols = [col for col in features.columns if col not in non_norm_cols]
+
+# Create the scaler object
+scaler = MinMaxScaler()
+
+# Fit and transform the numerical features
+features[norm_cols] = scaler.fit_transform(features[norm_cols])
+
+####################################
+# Build Model
+####################################
+
+# Split the data into training and testing sets
+features_train, features_test, target_train, target_test = train_test_split(features, target, test_size=0.2, random_state=42)
+
+# Create a Random Forest Regressor
+rf = RandomForestRegressor(n_estimators=100, random_state=42)
+
+# Train the model
+rf.fit(features_train, target_train)
+
+# Get the feature importances
+importances = rf.feature_importances_
+
+# Create a DataFrame for visualization
+feature_list = list(features.columns)
+feature_importances = pd.DataFrame({'feature': feature_list, 'importance': importances})
+
+# Sort the DataFrame by importance in descending order
+feature_importances = feature_importances.sort_values('importance', ascending=False)
+
+# Print the top n features
+n = 10  # or replace with any number you want
+print(feature_importances.head(n))
+
+####################################
+# Denormalize Data
+####################################
+
+# Assuming 'predictions' is the output from your model
+predictions = scaler.inverse_transform(predictions)
+
+# Print the denormalized predictions
+print(predictions)
+
+# Convert ndarray to DataFrame
+predictions = pd.DataFrame(predictions, columns=norm_cols)
+
+# Print the denormalized predictions
+print(predictions)
