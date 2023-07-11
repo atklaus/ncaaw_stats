@@ -5,7 +5,9 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -28,7 +30,7 @@ def convert_columns_to_lowercase(df):
 ncaa_df = pd.read_csv('use_data/all_ncaa.csv')
 wnba_df = pd.read_csv('use_data/all_wnba.csv')
 use_df = ncaa_df.merge(wnba_df, left_on='name', right_on='player_name', how='left',)
-use_df.rename(columns={'adv_per_x': 'adv_per_college','adv_per_y':'adv_per_pro','player_name_x':'player_name'}, inplace=True)
+use_df.rename(columns={'adv_per_x': 'adv_per_college','adv_per_y':'adv_per_pro','adv_ws/48':'adv_ws_48_pro','player_name_x':'player_name'}, inplace=True)
 use_df = convert_columns_to_lowercase(use_df)
 use_df.drop(columns =['player_name_y','name','pg_school','pg_season','adv_class', 'pg_class', 'adv_school', 'pg_conf'], axis=1, inplace=True)
 use_df.reset_index(drop=True, inplace=True)
@@ -151,8 +153,9 @@ conference_cols = [col for col in model_df.columns if col.startswith('conference
 non_norm_cols = college_team_cols + conference_cols
 
 # Separate features and target
-features = model_df.drop(columns=['adv_per_pro'], axis=1)
-target = model_df['adv_per_pro']
+features = model_df.drop(columns=['adv_per_pro','adv_ws_48_pro',], axis=1)
+# target = model_df['adv_ws_48_pro']
+target = model_df['adv_ws_48_pro'].apply(lambda x: 1 if x > 0 else 0)
 
 # Identify numerical columns which needs to be normalized
 norm_cols = [col for col in features.columns if col not in non_norm_cols]
@@ -164,20 +167,122 @@ scaler = MinMaxScaler()
 features[norm_cols] = scaler.fit_transform(features[norm_cols])
 
 ####################################
-# Build Model
+# Feature Selection
 ####################################
 
-# Split the data into training and testing sets
+corr_matrix = features.corr().abs()
+
+# Select the upper triangle of the correlation matrix
+upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool_))
+
+# Find index of feature columns with correlation greater than 0.85
+to_drop = [column for column in upper.columns if any(upper[column] > 0.85)]
+
+# Drop features with lower importance
+to_keep = [x for x in to_drop if x in feature_importances.nlargest(10, 'importance').index]
+to_drop = list(set(to_drop) - set(to_keep))
+
+# Drop highly correlated features
+X = features.drop(to_drop, axis=1)
+y = target.copy()
+
+# Run a random forest to check feature importances
+rf = RandomForestClassifier(random_state=42)
+rf.fit(X,y)
+feature_importances = pd.DataFrame(rf.feature_importances_, index = X.columns, columns=['importance']).sort_values('importance', ascending=False)
+
+n = 50
+importances = rf.feature_importances_
+indices = np.argsort(importances)[-n:]
+plt.title('Feature Importances')
+plt.barh(range(len(indices)), importances[indices], color='b', align='center')
+plt.yticks(range(len(indices)), [X.columns[i] for i in indices])
+plt.xlabel('Relative Importance')
+plt.show()
+
+# Select only top 17 features based on importance
+X = X[feature_importances.nlargest(12, 'importance').index]
+
+####################################
+# CLASSIFICATION: Build Model
+####################################
+
+from sklearn.ensemble import RandomForestClassifier
+# Split the data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Define the model
+model = RandomForestClassifier(random_state=42)
+
+# Define the parameters for hyperparameter tuning
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'bootstrap': [True, False]
+}
+
+# Perform hyperparameter tuning
+grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, verbose=2, n_jobs=-1)
+grid_search.fit(X_train, y_train)
+
+# Print the best parameters
+print(grid_search.best_params_)
+
+# Use the best model
+best_model = grid_search.best_estimator_
+
+# Make predictions
+y_pred = best_model.predict(X_test)
+
+# Evaluate the model
+print(classification_report(y_test, y_pred))
+
+# Top n feature importances
+n = 10
+importances = best_model.feature_importances_
+indices = np.argsort(importances)[-n:]
+plt.title('Feature Importances')
+plt.barh(range(len(indices)), importances[indices], color='b', align='center')
+plt.yticks(range(len(indices)), [X.columns[i] for i in indices])
+plt.xlabel('Relative Importance')
+plt.show()
+
+
+####################################
+# REGRESSION: Build Model
+####################################
+
 features_train, features_test, target_train, target_test = train_test_split(features, target, test_size=0.2, random_state=42)
 
-# Create a Random Forest Regressor
-rf = RandomForestRegressor(n_estimators=100, random_state=42)
+# Define the parameter grid
+param_grid = {
+    'n_estimators': [50, 100, 200], # Number of trees in random forest
+    'max_features': ['auto', 'sqrt'], # Number of features to consider at every split
+    'max_depth': [10, 20, 30, None], # Maximum number of levels in tree
+    'min_samples_split': [2, 5, 10], # Minimum number of samples required to split a node
+    'min_samples_leaf': [1, 2, 4], # Minimum number of samples required at each leaf node
+    'bootstrap': [True, False] # Method of selecting samples for training each tree
+}
 
-# Train the model
-rf.fit(features_train, target_train)
+# Create a base model
+rf = RandomForestRegressor(random_state=42)
+
+# Instantiate the grid search model
+grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+
+# Fit the grid search to the data
+grid_search.fit(features_train, target_train)
+
+# Print the best parameters
+print(grid_search.best_params_)
+
+# Train the model with the best parameters
+best_rf = grid_search.best_estimator_
 
 # Get the feature importances
-importances = rf.feature_importances_
+importances = best_rf.feature_importances_
 
 # Create a DataFrame for visualization
 feature_list = list(features.columns)
@@ -189,6 +294,39 @@ feature_importances = feature_importances.sort_values('importance', ascending=Fa
 # Print the top n features
 n = 10  # or replace with any number you want
 print(feature_importances.head(n))
+
+####################################
+# Model Evaluation
+####################################
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# Use the forest's predict method on the test data
+predictions = best_rf.predict(features_test)
+
+# Calculate the absolute errors
+errors = abs(predictions - target_test)
+
+# Calculate mean absolute error (MAE)
+mae = mean_absolute_error(target_test, predictions)
+print('Mean Absolute Error:', round(mae, 2))
+
+# Calculate mean squared error (MSE)
+mse = mean_squared_error(target_test, predictions)
+print('Mean Squared Error:', round(mse, 2))
+
+# Calculate R-squared score
+r2 = r2_score(target_test, predictions)
+print('R-squared Score:', round(r2, 2))
+
+# Print out the mean absolute error (mae)
+print('Average model error:', round(np.mean(errors), 2))
+
+# Calculate mean absolute percentage error (MAPE)
+mape = 100 * (errors / target_test)
+accuracy = 100 - np.mean(mape)
+print('Accuracy:', round(accuracy, 2), '%.')
+
 
 ####################################
 # Denormalize Data
