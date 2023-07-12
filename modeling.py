@@ -13,6 +13,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from sklearn.metrics import confusion_matrix, accuracy_score
+
 
 ####################################
 # Clean Data
@@ -348,12 +350,52 @@ grid_xgb.fit(X_train, y_train)
 print(grid_xgb.best_params_)
 
 # Predict
-grid_predictions_xgb = grid_xgb.predict(X_test)
+y_pred = grid_xgb.predict(X_test)
+
+# Compute the confusion matrix
+conf_mat = confusion_matrix(y_test, y_pred)
+
+# Compute the accuracy
+accuracy = accuracy_score(y_test, y_pred)
 
 # Evaluation
-print("Accuracy XGBoost:", metrics.accuracy_score(y_test, grid_predictions_xgb))
-print(classification_report(y_test, grid_predictions_xgb))
+# print("Accuracy XGBoost:", metrics.accuracy_score(y_test, grid_predictions_xgb))
+print(classification_report(y_test, y_pred))
 
+# Plot the confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_mat, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=['Predicted 0', 'Predicted 1'], 
+            yticklabels=['Actual 0', 'Actual 1'])
+plt.title('Confusion Matrix')
+plt.show()
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+
+# Compute the probabilities of the positive class
+y_pred_prob = grid_xgb.predict_proba(X_test)[:, 1]
+
+# Compute the ROC curve
+fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
+
+# Compute the AUC
+roc_auc = auc(fpr, tpr)
+
+# Plot the ROC curve
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC')
+plt.legend(loc="lower right")
+plt.show()
 
 ####################################
 # REGRESSION: Build Model
