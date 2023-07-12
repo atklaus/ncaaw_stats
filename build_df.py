@@ -61,7 +61,7 @@ ncaa_df[~np.isnan(ncaa_df['adv_ws/40'])]
 ncaa_df[ncaa_df['name'] =='Natalie Novosel'].to_excel('test.xlsx')
 
 
-ncaa_df.to_csv('use_data/all_ncaa.csv')
+ncaa_df.to_csv('use_data/all_ncaa_updated.csv')
 
 
 ##########################################

@@ -297,7 +297,7 @@ for index, row in teams_df.iterrows():
 #     player_page_df.to_csv('players/' + player + '.csv')
 
 folder_path = 'seasons/'
-csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
+csv_files = [f for f in os.listdir(folder_path) if f.endswith('2022-23.csv')]
 dfs = []
 
 for csv_file in csv_files:
