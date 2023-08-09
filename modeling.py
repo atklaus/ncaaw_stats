@@ -14,7 +14,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score
-
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+from sklearn import svm
+from sklearn.model_selection import GridSearchCV
+from sklearn import metrics
 
 ####################################
 # Clean Data
@@ -29,16 +36,17 @@ def convert_columns_to_lowercase(df):
 
     return df
 
-
 ncaa_df = pd.read_csv('use_data/all_ncaa_updated.csv')
 wnba_df = pd.read_csv('use_data/all_wnba.csv')
 model_df = ncaa_df.merge(wnba_df, left_on='name', right_on='player_name', how='left',)
-model_df.rename(columns={'adv_per_x': 'adv_per_college','adv_per_y':'adv_per_pro','adv_ws/48':'adv_ws_48_pro','player_name_x':'player_name'}, inplace=True)
+model_df.rename(columns={'adv_per_x': 'adv_per_college','adv_per_y':'per_pro','adv_ws/48':'ws_48_pro','player_name_x':'player_name'}, inplace=True)
 model_df = convert_columns_to_lowercase(model_df)
-model_df.drop(columns =['player_name_y','name','pg_school','pg_season','adv_class', 'pg_class', 'adv_school', 'pg_conf'], axis=1, inplace=True)
+model_df.drop(columns =['player_name_y','name','pg_school','pg_season','adv_class', 'pg_class', 'adv_school', 'pg_conf','tot_season','tot_school','tot_class'], axis=1, inplace=True)
 model_df.reset_index(drop=True, inplace=True)
 model_df = model_df.dropna(how='all', axis=1)
-model_df.to_csv('test.csv')
+model_df.dropna(subset=['ws_48_pro'],inplace=True)
+model_df.reset_index(inplace=True, drop=True)
+model_df.to_excel('eda.xlsx')
 
 ####################################
 # EDA
@@ -50,7 +58,7 @@ model_df['college_team'].value_counts()[:10].plot(kind='bar')
 plt.title('Top 10 College Teams')
 plt.xlabel('College Team')
 plt.ylabel('Count')
-plt.show()
+# plt.show()
 
 ####################################
 # Feature Engineering
@@ -107,18 +115,33 @@ model_df['DPOY_count'] = model_df['awards'].apply(lambda x: count_award_occurren
 model_df['All_Defense_count'] = model_df['awards'].apply(lambda x: count_award_occurrences(x.split(','), 'All-Defense') if isinstance(x, str) else 0)
 model_df['MOP_count'] = model_df['awards'].apply(lambda x: count_award_occurrences(x.split(','), 'MOP') if isinstance(x, str) else 0)
 model_df['MIP_count'] = model_df['awards'].apply(lambda x: count_award_occurrences(x.split(','), 'MIP') if isinstance(x, str) else 0)
-
+model_df['award_count'] = model_df['awards'].apply(lambda x: len(x.split(',')))
 model_df.drop(columns=['awards'],inplace=True,axis=0)
 
-model_df.columns
+col_types_remove = ['conference','college_team','position','adv_','pg_','_count']
+# col_types_remove = ['conference','college_team','position','tot_','pg_','_count']
+# col_types_remove = ['conference_','college_team_','adv_','pg_']
+# col_types_remove = ['conference_','college_team_','tot_']
+
+for col_type in col_types_remove:
+    cols_to_drop = [col for col in model_df.columns if col.startswith(col_type)]
+    model_df = model_df.drop(cols_to_drop, axis=1)
+
+cols_to_drop = [col for col in model_df.columns if col.endswith('_count')]
+model_df = model_df.drop(cols_to_drop, axis=1)
+
 all_columns = model_df.columns
 non_categorical_cols = [col for col in all_columns if col not in categorical_cols]
 
+
 for col in non_categorical_cols:
     model_df[col] = pd.to_numeric(model_df[col], errors='coerce')
-numerical_cols = model_df.select_dtypes(include=['float64', 'int64']).columns
+model_df.drop(columns=['per_pro'], axis=1, inplace=True)
+model_df.drop(columns=['debut_year'], axis=1, inplace=True)
 
-model_df.to_excel('model_df.xlsx')
+numerical_cols = model_df.select_dtypes(include=['float64', 'int64']).columns
+model_df.to_excel('model_df.xlsx',index=False)
+
 
 ####################################
 # Impute Missing Values
@@ -144,7 +167,7 @@ model_df['All_Freshman_count'].value_counts()[:10].plot(kind='bar')
 plt.title('Made Conference All Freshman Team')
 plt.xlabel('All Freshman Team')
 plt.ylabel('Count')
-plt.show()
+#plt.show()
 
 # A histogram of the 'pg_pts' column
 plt.figure(figsize=(10,6))
@@ -153,7 +176,7 @@ plt.title('Distribution of Win Shares')
 plt.xlabel('Win Shares')
 plt.ylabel('Frequency')
 plt.xlim([-1, 1])  # adjust the range here
-plt.show()
+#plt.show()
 
 plt.figure(figsize=(10,6))
 sns.histplot(model_df['height'], kde=True)
@@ -161,7 +184,7 @@ plt.title('Distribution of Height (cm)')
 plt.xlabel('Height')
 plt.ylabel('Frequency')
 plt.xlim([150, 210])  # adjust the range here
-plt.show()
+#plt.show()
 
 
 # A histogram of the 'pg_pts' column
@@ -171,7 +194,7 @@ plt.title('Distribution of Points Per Game')
 plt.xlabel('Points Per Game')
 plt.ylabel('Frequency')
 plt.xlim([0, 30])  # adjust the range here
-plt.show()
+#plt.show()
 
 # A boxplot of 'pg_pts' grouped by 'conference'
 plt.figure(figsize=(10,6))
@@ -179,7 +202,7 @@ sns.boxplot(x='conference', y='pg_pts', data=model_df)
 plt.title('Points Per Game Distribution by Conference')
 plt.xticks(rotation=90)  # rotate x-axis labels
 plt.ylim([0, 30])  # adjust the range here
-plt.show()
+#plt.show()
 
 # Correlation matrix
 corr_mat = model_df.corr()
@@ -188,16 +211,34 @@ corr_mat = model_df.corr()
 plt.figure(figsize=(12,8))
 sns.heatmap(corr_mat, annot=True)
 plt.title('Correlation matrix of variables')
-plt.show()
+#plt.show()
 
 plt.scatter(model_df['pg_g'], model_df['pg_gs'])
 plt.xlabel('pg_g')
 plt.ylabel('pg_gs')
 plt.title('pg_g vs pg_gs')
-plt.show()
+#plt.show()
 
 sns.pairplot(model_df)
-plt.show()
+#plt.show()
+
+
+####################################
+# Binning
+####################################
+
+# Calculate the median for values below 0 and above 0
+median_below_0 = model_df[model_df['ws_48_pro'] < 0]['ws_48_pro'].median()
+median_above_0 = model_df[model_df['ws_48_pro'] > 0]['ws_48_pro'].median()
+
+# Create bins based on the calculated medians
+final_bins = [-np.inf, median_below_0, 0, median_above_0, np.inf]
+final_labels = ['Poor', 'Below Average', 'Above Average', 'Excellent']
+
+# Get the counts for each bin
+bin_counts_final = model_df['ws_48_pro'].value_counts().sort_index()
+bin_counts_final, final_bins
+
 
 ####################################
 # Normalize Data
@@ -211,9 +252,11 @@ conference_cols = [col for col in model_df.columns if col.startswith('conference
 non_norm_cols = college_team_cols + conference_cols
 
 # Separate features and target
-features = model_df.drop(columns=['adv_per_pro','adv_ws_48_pro',], axis=1)
-# target = model_df['adv_ws_48_pro']
-target = model_df['adv_ws_48_pro'].apply(lambda x: 1 if x > 0 else 0)
+features = model_df.drop(columns=['ws_48_pro',], axis=1)
+# target = pd.qcut(model_df['ws_48_pro'], q=3, labels=['Low', 'Medium', 'High'])
+# target = pd.cut(model_df['ws_48_pro'], bins=final_bins, labels=final_labels)
+target = model_df['ws_48_pro'].apply(lambda x: 1 if x > 0 else 0)
+
 
 # Identify numerical columns which needs to be normalized
 norm_cols = [col for col in features.columns if col not in non_norm_cols]
@@ -241,12 +284,31 @@ X = features.drop(to_drop, axis=1)
 y = target.copy()
 
 # Run a random forest to check feature importances
-rf = RandomForestClassifier(random_state=42)
-rf.fit(X,y)
-feature_importances = pd.DataFrame(rf.feature_importances_, index = X.columns, columns=['importance']).sort_values('importance', ascending=False)
+model = RandomForestClassifier(random_state=42)
+
+# Define the parameters for hyperparameter tuning
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'bootstrap': [True, False]
+}
+
+# Perform hyperparameter tuning
+grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, verbose=2, n_jobs=-1)
+grid_search.fit(X, y)
+
+# Print the best parameters
+print(grid_search.best_params_)
+
+# Use the best model
+best_model = grid_search.best_estimator_
+
+feature_importances = pd.DataFrame(best_model.feature_importances_, index = X.columns, columns=['importance']).sort_values('importance', ascending=False)
 
 n = len(feature_importances)
-importances = rf.feature_importances_
+importances = best_model.feature_importances_
 indices = np.argsort(importances)[-n:]
 plt.title('Feature Importances')
 plt.barh(range(len(indices)), importances[indices], color='b', align='center')
@@ -255,7 +317,7 @@ plt.xlabel('Relative Importance')
 plt.show()
 
 # Select only top 17 features based on importance
-X = X[feature_importances.nlargest(20, 'importance').index]
+X = X[feature_importances.nlargest(6, 'importance').index]
 
 # Split the data
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -307,10 +369,6 @@ plt.show()
 ####################################
 # SVM
 ####################################
-
-from sklearn import svm
-from sklearn.model_selection import GridSearchCV
-from sklearn import metrics
 
 # Set up parameter grid for SVM
 param_grid_svm = {'C': [0.1, 1, 10, 100, 1000], 'gamma': [1, 0.1, 0.01, 0.001, 0.0001], 'kernel': ['linear', 'rbf']}
@@ -370,11 +428,6 @@ sns.heatmap(conf_mat, annot=True, fmt='d', cmap='Blues',
 plt.title('Confusion Matrix')
 plt.show()
 
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
-from sklearn.metrics import roc_curve, auc
-import matplotlib.pyplot as plt
 
 # Compute the probabilities of the positive class
 y_pred_prob = grid_xgb.predict_proba(X_test)[:, 1]
@@ -488,3 +541,125 @@ predictions = pd.DataFrame(predictions, columns=norm_cols)
 
 # Print the denormalized predictions
 print(predictions)
+
+
+####################################
+# PCA
+####################################
+
+data_df = model_df.copy()
+data_df_filled = data_df.fillna(data_df.median())
+
+# Check if there are any remaining missing values
+missing_values = data_df_filled.isnull().sum().sum()
+
+# Separate the ws_48_pro column for prediction
+ws_48_pro_values = data_df['ws_48_pro'].values
+
+# Drop the ws_48_pro column from the main data
+data_df = data_df.drop(columns=['ws_48_pro'])
+
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# Standardize the data
+scaler = StandardScaler()
+data_scaled = scaler.fit_transform(data_df_filled)
+
+# Perform PCA to capture 95% of the variance
+pca = PCA(n_components=0.95)
+principal_components = pca.fit_transform(data_scaled)
+
+# Determine the number of principal components
+num_components = pca.n_components_
+
+num_components
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Calculate the cumulative variance
+cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
+
+# Plotting the explained variance and cumulative variance
+plt.figure(figsize=(10, 6))
+plt.bar(range(1, num_components + 1), pca.explained_variance_ratio_, alpha=0.5, align='center',
+        label='Individual explained variance', color='blue')
+plt.step(range(1, num_components + 1), cumulative_variance, where='mid', 
+         label='Cumulative explained variance', color='red')
+plt.ylabel('Explained variance ratio')
+plt.xlabel('Principal components')
+plt.legend(loc='best')
+plt.tight_layout()
+plt.title("Explained Variance by Each Component and Cumulative Variance")
+plt.show()
+
+explained_variance_df = pd.DataFrame({
+    'Component': range(1, num_components + 1),
+    'Explained Variance': pca.explained_variance_ratio_,
+    'Cumulative Variance': cumulative_variance
+})
+
+explained_variance_df
+
+# Get the feature loadings for the first two principal components
+loadings = pca.components_
+
+# Create a DataFrame for the loadings
+loadings_df = pd.DataFrame(loadings.T, columns=[f"PC{i+1}" for i in range(num_components)], index=data_df_filled.columns)
+
+# Extract the loadings for the first two components
+loadings_first_two = loadings_df[["PC1", "PC2"]]
+
+loadings_first_two
+
+import seaborn as sns
+
+# Plotting heatmap for the feature loadings
+plt.figure(figsize=(10, 12))
+sns.heatmap(loadings_first_two, annot=True, cmap='coolwarm', cbar=True, square=True, fmt='.2f', 
+            annot_kws={'size': 12}, yticklabels=loadings_first_two.index, xticklabels=['PC1', 'PC2'])
+plt.title("Feature Loadings for the First Two Principal Components")
+plt.tight_layout()
+plt.show()
+
+
+####################################
+# PCA
+####################################
+
+# Load the original dataset
+original_df = pd.read_excel("/mnt/data/model_df.xlsx")
+
+# Drop the target variable for PCA
+X_original = original_df.drop(columns=['ws_48_pro'])
+
+# Preprocess the data
+X_preprocessed_original = preprocessor_updated.fit_transform(X_original)
+
+# Apply PCA
+from sklearn.decomposition import PCA
+
+pca = PCA()
+X_pca = pca.fit_transform(X_preprocessed_original)
+
+# Visualize the explained variance by each principal component
+explained_variance_ratio = pca.explained_variance_ratio_
+
+explained_variance_ratio_cumsum = np.cumsum(explained_variance_ratio)
+
+explained_variance_ratio, explained_variance_ratio_cumsum
+
+import matplotlib.pyplot as plt
+
+# Plot the explained variance for each principal component
+plt.figure(figsize=(14, 7))
+plt.bar(range(1, len(explained_variance_ratio) + 1), explained_variance_ratio, alpha=0.5, align='center', label='Individual explained variance')
+plt.step(range(1, len(explained_variance_ratio_cumsum) + 1), explained_variance_ratio_cumsum, where='mid', label='Cumulative explained variance')
+plt.ylabel('Explained Variance Ratio')
+plt.xlabel('Principal Components')
+plt.xticks(ticks=range(1, len(explained_variance_ratio) + 1))
+plt.legend(loc='best')
+plt.tight_layout()
+plt.title('PCA Explained Variance')
+plt.show()

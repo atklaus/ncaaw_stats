@@ -13,7 +13,7 @@ node_modules
 
 # Ignore SASS config files
 .sass-cache
-
+/old
 /teams
 /*players*
 /*seasons*

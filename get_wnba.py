@@ -59,11 +59,10 @@ def check_proxy(proxy):
  
 	return get("http://httpbin.org/ip", proxy) is not None 
  
-available_proxies = list(filter(check_proxy, proxies))
-
-proxies = {'http': 'http://{}'} 
-response = requests.get('http://httpbin.org/ip', proxies=proxies) 
-print(response.json()['origin']) # 190.64.18.162
+# available_proxies = list(filter(check_proxy, proxies))
+# proxies = {'http': 'http://{}'} 
+# response = requests.get('http://httpbin.org/ip', proxies=proxies) 
+# print(response.json()['origin']) # 190.64.18.162
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 6.3; Win64; x64; Trident/7.0; Touch; MASMJS; rv:11.0) like Gecko",
@@ -102,12 +101,14 @@ def requst_params(user_agents, available_proxies):
     proxies = {'http': 'http://{}'.format(proxy)} 
     return headers, proxies
 
+user_agent = random.choice(user_agents) 
+headers = {'User-Agent': user_agent} 
+
 
 for letter in letters:
     url = BASE_URL.format(letter)
     session = requests.session()
-
-    response = session.get(url, headers = headers, proxies=proxy_rand)
+    response = session.get(url, headers = headers)
     page_html = BeautifulSoup(response.text, 'html5lib')
     url_dict = utils.get_url_dict(page_html)
 
@@ -120,23 +121,28 @@ for letter in letters:
         import time
         time.sleep(5.5)
         session = requests.session()
-
         player_url = REF_HOME + player_url
-        headers, proxy_rand = requst_params(user_agents, available_proxies)
-        response = session.get(player_url, headers = headers, proxies=proxy_rand)
+        # headers, proxy_rand = requst_params(user_agents, available_proxies)
+        # response = session.get(player_url, headers = headers, proxies=proxy_rand)
+        user_agent = random.choice(user_agents) 
+        headers = {'User-Agent': user_agent} 
+        response = session.get(player_url, headers = headers)
         page_html = BeautifulSoup(response.text, 'html5lib')
         url_dict = utils.get_url_dict(page_html)
         div_class = page_html.findAll('h1')
-        player_name = div_class[0].find('span').text
+        player_name = div_class[0].find('span').string
 
-        tables = page_html.findAll("table")
-        for table in tables:
-            if 'Advanced' in str(table):
-                player_adv_df = pd.read_html(str(table))[0]
-                player_adv_df = player_adv_df.add_prefix('adv_')
-            if 'Per Game' in str(table):
-                player_pg_df = pd.read_html(str(page_html))[0]
-                player_pg_df = player_pg_df.add_prefix('pg_')
+        soup = BeautifulSoup(response.content, 'lxml')
+        
+        h2_tag = soup.find('h2', text='Advanced')
+        table = h2_tag.find_next('table')            
+        player_adv_df = pd.read_html(str(table))[0]
+        player_adv_df = player_adv_df.add_prefix('adv_')
+
+        h2_tag = soup.find('h2', text='Per Game')
+        table = h2_tag.find_next('table')            
+        player_pg_df = pd.read_html(str(table))[0]
+        player_pg_df = player_pg_df.add_prefix('pg_')
 
         base_df = player_pg_df.merge(player_adv_df,how='left',left_on='pg_Year',right_on='adv_Year')
         base_df['player_name'] =player_name
@@ -147,27 +153,3 @@ for letter in letters:
 
         base_df.to_csv('wnba_ref/' + player_name + '.csv')
 
-
-BASE_URL = 'https://www.sports-reference.com/'
-team_url = 'https://www.sports-reference.com/cbb/schools/abilene-christian/women/'
-
-
-player_url = REF_HOME + player_url
-response = session.get(team_url, headers = headers)
-page_html = BeautifulSoup(response.text, 'html5lib')
-url_dict = utils.get_url_dict(page_html)
-team_page_df = pd.read_html(str(page_html),header=1)[0]
-team_page_df['url'] =BASE_URL + team_page_df['Season'].map(url_dict)
-
-
-div_class = page_html.findAll('h1')
-player_name = div_class[0].find('span').text
-
-tables = page_html.findAll("table")
-for table in tables:
-    if 'Advanced' in str(table):
-        player_adv_df = pd.read_html(str(table))[0]
-        player_adv_df = player_adv_df.add_prefix('adv_')
-    if 'Per Game' in str(table):
-        player_pg_df = pd.read_html(str(page_html))[0]
-        player_pg_df = player_pg_df.add_prefix('pg_')
