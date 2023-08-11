@@ -39,6 +39,7 @@ def convert_columns_to_lowercase(df):
 ncaa_df = pd.read_csv('use_data/all_ncaa_updated.csv')
 wnba_df = pd.read_csv('use_data/all_wnba.csv')
 model_df = ncaa_df.merge(wnba_df, left_on='name', right_on='player_name', how='left',)
+# model_df = pd.read_csv('use_data/case_study.csv')
 model_df.rename(columns={'adv_per_x': 'adv_per_college','adv_per_y':'per_pro','adv_ws/48':'ws_48_pro','player_name_x':'player_name'}, inplace=True)
 model_df = convert_columns_to_lowercase(model_df)
 model_df.drop(columns =['player_name_y','name','pg_school','pg_season','adv_class', 'pg_class', 'adv_school', 'pg_conf','tot_season','tot_school','tot_class'], axis=1, inplace=True)

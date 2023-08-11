@@ -28,13 +28,12 @@ from sklearn import metrics
 #########################
 # SET RUN TYPE
 #########################
-n=11
-tuned_summary_filename = "3_model_evaluation_11_feat.xlsx"
+n=10
+tuned_summary_filename = "tot_model_evaluation_11_feat.xlsx"
 # Load the data from the provided Excel file
 df = pd.read_excel("model_df.xlsx")
-cols_to_keep = [col for col in df.columns if col.startswith('tot_')] + ['ws_48_pro']
-df = df[cols_to_keep]
-
+# cols_to_keep = [col for col in df.columns if col.startswith('tot_')] + ['ws_48_pro']
+# df = df[cols_to_keep]
 
 #########################
 # MODEL
@@ -75,8 +74,9 @@ from sklearn.preprocessing import StandardScaler
 
 # Separating the features and target variable
 X = df_dropped_corr.drop(columns=["ws_48_pro"])
-y = (df_dropped_corr["ws_48_pro"] > 0).astype(int)  # Binary classification (1 if ws_48_pro > 0 else 0)
-# y = pd.qcut(df['ws_48_pro'], q=3, labels=['Low', 'Medium', 'High'])
+y = df_dropped_corr['ws_48_pro'].apply(lambda x: 1 if x > 0 else 0)
+# y = (df_dropped_corr["ws_48_pro"] > 0).astype(int)  # Binary classification (1 if ws_48_pro > 0 else 0)
+y = pd.qcut(df['ws_48_pro'], q=3, labels=['Low', 'Medium', 'High'])
 
 # Standardize the data
 scaler = StandardScaler()
@@ -128,10 +128,10 @@ plt.savefig(plot_filename)
 plt.show()
 
 # n=11
-top_features = X.columns[sorted_idx][n:]
+top_features = X.columns[sorted_idx][-n:]
 feature_importances = pd.DataFrame(best_model.feature_importances_, index = X.columns, columns=['importance']).sort_values('importance', ascending=False)
 X_top = X[feature_importances.nlargest(n, 'importance').index]
-
+selected_features = list(X_top.columns)
 # Split the data into training and test sets (80% - 20%)
 X_train, X_test, y_train, y_test = train_test_split(X_top, y, test_size=0.2, random_state=42)
 X_train = scaler.fit_transform(X_train)
@@ -232,6 +232,10 @@ xgb_best_params
 # Random Forest
 rf_tuned = RandomForestClassifier(**rf_best_params, random_state=42)
 rf_metrics_tuned = evaluate_model(rf_tuned, X_train, y_train, X_test, y_test)
+y_pred_selected = rf_tuned.predict(X_test)
+conf_matrix = confusion_matrix(y_test, y_pred_selected)
+conf_matrix_df = pd.DataFrame(conf_matrix, columns=['Predicted Negative', 'Predicted Positive'], index=['Actual Negative', 'Actual Positive'])
+conf_matrix_df
 
 # Logistic Regression
 logreg_tuned = LogisticRegression(**logreg_best_params, random_state=42, max_iter=5000)
@@ -277,3 +281,146 @@ tuned_summary_df['Best Parameters'] = [
 # Save the tuned summary dataframe to a downloadable file
 tuned_summary_df.to_excel(tuned_summary_filename, index=False)
 
+
+############
+# PREDICT
+############
+
+og_df = pd.read_csv('use_data/case_study.csv')
+case_study_df = og_df.copy()
+case_study_df.columns
+# selected_features = ['tot_2p', 'tot_fga', 'tot_drb', 'tot_pf', 'tot_3p%', 'tot_fg','tot_trb', 'tot_ft%', 'tot_stl', 'tot_fg%', 'tot_2p%']
+selected_features = ['adv_ws/40', 'pg_fg%', 'adv_ts%', 'pg_2p%', 'adv_ws', 'adv_stl%', 'adv_dws', 'adv_per', 'tot_stl', 'tot_drb']
+# Preprocess the new dataset
+case_study_df.columns
+case_study_df= case_study_df[selected_features] 
+# Checking for missing values in the dataset
+missing_values = case_study_df.isnull().sum()
+stats, missing_values
+
+# Impute missing values with median
+for column in missing_values.index:
+    if missing_values[column] > 0:
+        case_study_df[column].fillna(case_study_df[column].median(), inplace=True)
+
+scaler = StandardScaler()
+case_study_df = scaler.fit_transform(case_study_df)
+
+predicted_values = rf_tuned.predict(case_study_df)
+prob_values = rf_tuned.predict_proba(case_study_df)
+predicted_values.sum()
+
+pred_df = og_df[["player_name"]].copy()
+pred_df["Predicted_Value"] = predicted_values
+pred_df["Probability_Pos"]  = prob_values[:,1]
+pred_df["Probability_Neg"]  = prob_values[:,0]
+pred_df["Predicted_Value"].sum()
+pred_df.sort_values(by=['Probability_Pos'],ascending=False)
+
+############
+# PREDICT
+############
+
+# Correcting the error and reprocessing the data
+
+model_df = pd.read_excel("model_df.xlsx")
+# Reloading the data and reprocessing 
+
+# Binning
+bin_edges = [
+    model_df["ws_48_pro"].min(),
+    model_df["ws_48_pro"].quantile(0.33),
+    model_df["ws_48_pro"].quantile(0.67),
+    model_df["ws_48_pro"].max()
+]
+bin_labels = ["low", "medium", "high"]
+model_df["ws_48_pro_bin"] = pd.cut(model_df["ws_48_pro"], bins=bin_edges, labels=bin_labels, include_lowest=True)
+model_df = model_df.drop(columns=["ws_48_pro"])
+
+# Removing correlated features
+correlation_matrix = model_df.drop(columns="ws_48_pro_bin").corr().abs()
+upper_triangle = correlation_matrix.where(np.triu(np.ones(correlation_matrix.shape), k=1).astype(bool))
+cols_to_drop = [column for column in upper_triangle.columns if any(upper_triangle[column] > 0.95)]
+model_df_reduced = model_df.drop(columns=cols_to_drop)
+
+# Selecting top 10 features
+X_reduced = model_df_reduced.drop(columns=['ws_48_pro_bin'])
+y_reduced = model_df_reduced['ws_48_pro_bin']
+X_imputed_fs = X_reduced.fillna(X_reduced.median())
+rf_classifier_fs = RandomForestClassifier(random_state=42)
+rf_classifier_fs.fit(X_imputed_fs, y_reduced)
+feature_importances_fs = rf_classifier_fs.feature_importances_
+features_df_fs = pd.DataFrame({
+    'Feature': X_reduced.columns,
+    'Importance': feature_importances_fs
+}).sort_values(by='Importance', ascending=False)
+top_10_features = features_df_fs.head(10)['Feature'].tolist()
+X_top_10 = model_df_reduced[top_10_features]
+
+# Imputation and standardization
+X_top_10_imputed = X_top_10.fillna(X_top_10.median())
+X_top_10_standardized = (X_top_10_imputed - X_top_10_imputed.mean()) / X_top_10_imputed.std()
+
+# Splitting
+X_train_top_10, X_test_top_10, y_train, y_test = train_test_split(X_top_10_standardized, y_reduced, test_size=0.2, random_state=42)
+
+# Training models and storing predictions
+
+# Logistic Regression
+logistic = LogisticRegression(max_iter=5000, random_state=42).fit(X_train_top_10, y_train)
+logistic_predictions = logistic.predict(X_test_top_10)
+
+# SVC
+svc = SVC(probability=True, random_state=42).fit(X_train_top_10, y_train)
+svc_predictions = svc.predict(X_test_top_10)
+
+# Random Forest
+rf = RandomForestClassifier(random_state=42).fit(X_train_top_10, y_train)
+rf_predictions = rf.predict(X_test_top_10)
+
+# XGBoost
+label_encoder = LabelEncoder()
+y_train_encoded = label_encoder.fit_transform(y_train)
+y_test_encoded = label_encoder.transform(y_test)
+xgb_model = XGBClassifier(objective='multi:softmax', num_class=3, eval_metric='mlogloss', use_label_encoder=False, random_state=42)
+xgb_model.fit(X_train_top_10, y_train_encoded)
+xgb_predictions = xgb_model.predict(X_test_top_10)
+
+# Metrics
+metrics_df = pd.DataFrame({
+    "Model": ["Logistic Regression", "SVC", "Random Forest", "XGBoost"],
+    "Accuracy": [
+        accuracy_score(y_test, logistic_predictions),
+        accuracy_score(y_test, svc_predictions),
+        accuracy_score(y_test, rf_predictions),
+        accuracy_score(y_test_encoded, xgb_predictions)
+    ],
+    "Precision": [
+        precision_score(y_test, logistic_predictions, average='macro'),
+        precision_score(y_test, svc_predictions, average='macro'),
+        precision_score(y_test, rf_predictions, average='macro'),
+        precision_score(y_test_encoded, xgb_predictions, average='macro')
+    ],
+    "Recall": [
+        recall_score(y_test, logistic_predictions, average='macro'),
+        recall_score(y_test, svc_predictions, average='macro'),
+        recall_score(y_test, rf_predictions, average='macro'),
+        recall_score(y_test_encoded, xgb_predictions, average='macro')
+    ],
+    "F1 Score": [
+        f1_score(y_test, logistic_predictions, average='macro'),
+        f1_score(y_test, svc_predictions, average='macro'),
+        f1_score(y_test, rf_predictions, average='macro'),
+        f1_score(y_test_encoded, xgb_predictions, average='macro')
+    ]
+    # ,"ROC AUC": [
+    #     roc_auc_score(y_test_encoded, logistic_predictions, average='macro'),
+    #     roc_auc_score(y_test_encoded, svc_predictions, average='macro'),
+    #     roc_auc_score(y_test_encoded, rf_predictions, average='macro'),
+    #     roc_auc_score(y_test_encoded, xgb_predictions, average='macro')
+    # ]
+})
+
+
+
+metrics_df

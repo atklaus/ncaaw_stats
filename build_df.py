@@ -171,53 +171,57 @@ wnba_df = wnba_df[(wnba_df['pg_year'] == 'Career')][['player_name','college_team
 wnba_df.to_csv('use_data/all_wnba.csv')
 
 
+##########################################
+# CASE STUDY
+##########################################
 
-# ########################################################################################################
+folder_path = 'case_study/'
+csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
+dfs = []
 
-# import pandas as pd
-# from fuzzywuzzy import process
-# from fuzzywuzzy import fuzz
+# Collect all unique columns from all CSVs
+all_columns = set()
 
-# def match_name(name, list_names, min_score=0):
-#     # -1 score incase we don't get any matches
-#     max_score = -1
-#     # Returning empty name for no match as well
-#     max_name = ""
-#     # Iternating over all names in the other
-#     for name2 in list_names:
-#         #Finding fuzzy match score
-#         score = process.extractOne(name, [name2],scorer=fuzz.token_set_ratio)[1]
-#         # Checking if we are above our threshold and have a better score
-#         if (score > min_score) & (score > max_score):
-#             max_name = name2
-#             max_score = score
-#     return max_name, max_score
+for csv_file in csv_files:
+    file_path = os.path.join(folder_path, csv_file)
+    df = pd.read_csv(file_path)
+    all_columns.update(df.columns)
 
-# # List of names
-# names_df1 = filtered_df['name'].tolist()
-# names_df2 = ncaa_df['name'].tolist()
-
-# # Dictionary of matched names
-# name_match = {}
-
-# # For each name in df1
-# for name1 in names_df1:
-#     # Find the best match in df2
-#     match = match_name(name1, names_df2, 90)
+for csv_file in csv_files:
+    file_path = os.path.join(folder_path, csv_file)
+    name = csv_file.replace('.csv','')
+    df = pd.read_csv(file_path)
     
-#     # New dict for storing data
-#     match_dict = {
-#         "df1_name": name1,
-#         "df2_name": match[0],
-#         "score": match[1]
-#     }
+    # Add missing columns with NaN values
+    for col in all_columns:
+        if col not in df.columns:
+            df[col] = np.nan
+    
+    df['name'] = name
+    dfs.append(df)
 
-#     # print match_dict
+# for csv_file in csv_files:
+#     file_path = os.path.join(folder_path, csv_file)
+#     name = csv_file.replace('.csv','')
+#     df = pd.read_csv(file_path)
+#     df['name'] = name
 
-#     # Append the match dict to our final list
-#     name_match[name1] = match_dict
+#     dfs.append(df)
 
-# name_match
-# # Now you can use this dictionary to map names in df1 to the corresponding ones in df2
-# df1["matched_name"] = df1["Name"].map(name_match)
+ncaa_df = pd.concat(dfs, axis=0, ignore_index=True)
 
+ncaa_df['season_start_year'] = pd.to_numeric(ncaa_df['pg_season'].str[:4], errors='coerce')
+latest_seasons_numeric = ncaa_df.groupby('player_name')['season_start_year'].max()
+players_last_year_2019_numeric = latest_seasons_numeric[latest_seasons_numeric == 2019].index.tolist()
+ncaa_df = ncaa_df[ncaa_df['player_name'].isin(players_last_year_2019_numeric)]
+
+cleaned_df = fill_pg_conf(ncaa_df)
+cleaned_df = cleaned_df[cleaned_df['pg_season'] == 'Career']
+cleaned_df['conference'] = cleaned_df['pg_conf']
+ncaa_df = ncaa_df.merge(cleaned_df[['name','conference']], on='name', how='left')
+ncaa_df= convert_columns_to_lowercase(ncaa_df)
+ncaa_df = ncaa_df[ncaa_df['pg_season'] == 'Career']
+ncaa_df.dropna(subset=['tot_pts'],inplace=True)
+# cleaned_df[cleaned_df['name'] =='Tamika Whitmore'].to_excel('test.xlsx')
+# ncaa_df.to_excel('use_data/all_ncaa_updated.xlsx')
+ncaa_df.to_csv('use_data/case_study.csv')

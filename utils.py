@@ -180,6 +180,7 @@ user_agents = [
 ]
 
 
+
 def requst_params(user_agents, available_proxies):    
     user_agent = random.choice(user_agents) 
     headers = {'User-Agent': user_agent} 
@@ -187,3 +188,96 @@ def requst_params(user_agents, available_proxies):
     proxies = {'http': 'http://{}'.format(proxy)} 
     return headers, proxies
 
+
+def extract_awards(page_html):
+    """Extract awards from the provided HTML."""
+    html_list = []
+    try:
+        html_list = page_html.find('ul', id='bling')
+        return ','.join([li.text for li in html_list.find_all('li')])
+    except:
+        return html_list
+
+def extract_name_and_position(page_html):
+    """Extract name and position from the provided HTML."""
+    name = None
+    position = None
+    div_class = page_html.find('div', class_='nothumb')
+    try:
+        name = div_class.find('span').text
+    except:
+        pass 
+    try:
+        position = div_class.find_all('p')[0].text.split(':')[1].strip()    
+    except:
+        pass
+
+    return name, position
+
+def extract_height(page_html):
+    """Extract and format height from the provided HTML."""
+    try:
+        div_class = page_html.find('div', class_='nothumb')
+        height = div_class.find_all('p')[1].text.strip()
+        match = re.search(r'\((.*?)\)', height)
+        
+        if match:
+            height = match.group(1)  # group(1) corresponds to the first group enclosed in parentheses
+            return height.replace('cm','').strip()
+    except:
+        return None
+
+def extract_details_from_page(page_html):
+    """Extract required details from the provided HTML."""
+    try:
+        awards = extract_awards(page_html)
+        name, position = extract_name_and_position(page_html)
+        height = extract_height(page_html)
+        return awards, name,position,height
+    except Exception as e:
+        # Logging the exception might be helpful for debugging purposes.
+        print(f"Error occurred: {e}")
+        return {}
+
+
+# import requests
+# from bs4 import BeautifulSoup
+# import time
+# import random
+
+# USER_AGENTS = [
+#     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+#     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+#     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+#     # Add more user agents if needed
+# ]
+
+# def get_random_user_agent():
+#     return random.choice(user_agents)
+
+
+# def is_proxy_valid(proxy):
+#     url = "http://httpbin.org/ip"
+#     proxies = {
+#         "http": proxy,
+#         "https": proxy
+#     }
+#     try:
+#         response = requests.get(url, proxies=proxies, timeout=5, headers={"User-Agent": get_random_user_agent()})
+#         if response.status_code == 200:
+#             return True
+#     except requests.RequestException:
+#         pass
+#     return False
+
+# def get_valid_proxies():
+#     all_proxies = get_free_proxies()
+#     valid_proxies = [proxy for proxy in all_proxies if is_proxy_valid(proxy)]
+#     return valid_proxies
+
+# # Introduce delay before making a request
+# time.sleep(random.uniform(1, 5))
+
+# # Example usage
+# valid_proxies = get_valid_proxies()
+# print(valid_proxies)

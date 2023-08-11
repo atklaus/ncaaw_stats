@@ -74,7 +74,7 @@ def get_player_url(row):
 # player_urls = ['https://www.sports-reference.com/cbb/players/skylar-diggins-1.html','https://www.sports-reference.com/cbb/players/avery-warley-1.html','https://www.sports-reference.com/cbb/players/nnemkadi-ogwumike-1.html']
 
 # for player_url in list(wnba_df['url']):
-for index,row in wnba_df[398:].iterrows():
+for index,row in wnba_df.iterrows():
 
     try:
         player_url = get_player_url(row)
@@ -88,22 +88,7 @@ for index,row in wnba_df[398:].iterrows():
             pass
 
         page_html = BeautifulSoup(response.text, 'html5lib')
-
-        try:
-            html_list = page_html.find('ul', id='bling')
-            awards = ','.join([li.text for li in html_list.find_all('li')])
-            div_class =page_html.find('div', class_='nothumb')
-            name = div_class.find('span').text
-            position = div_class.find_all('p')[0].text.split(':')[1].strip()
-            height = div_class.find_all('p')[1].text.strip()
-            match = re.search(r'\((.*?)\)', height)
-            if match:
-                height = match.group(1)  # group(1) corresponds to the first group enclosed in parentheses
-                height = height.replace('cm','')
-            else:
-                height = 'N/A'
-        except:
-            pass
+        awards,name,position,height = utils.extract_details_from_page(page_html)
 
         div_class = page_html.findAll('h1')
         player_name = div_class[0].find('span').text
@@ -132,36 +117,16 @@ for index,row in wnba_df[398:].iterrows():
         # Perform merging
         base_df = dataframes['pg_'].merge(dataframes['adv_'], how='left', left_on='pg_Season', right_on='adv_Season')
         base_df = base_df.merge(dataframes['tot_'], how='left', left_on='pg_Season', right_on='tot_Season')
-
-        # tables = page_html.findAll("table")
-        # for table in tables:
-        #     if 'Advanced' in str(table):
-        #         player_adv_df = pd.read_html(str(table))[0]
-        #         player_adv_df = player_adv_df.add_prefix('adv_')
-        #         break
-        # for table in tables:
-        #     if 'Per Game' in str(table):
-        #         player_pg_df = pd.read_html(str(page_html))[0]
-        #         player_pg_df = player_pg_df.add_prefix('pg_')
-        #         break
-
-        # for table in tables:
-        #     if 'Totals' in str(table):
-        #         player_total_df = pd.read_html(str(page_html))[0]
-        #         player_total_df = player_total_df.add_prefix('tot_')
-        #         break
-
         base_df['player_name'] =row['player_name']
         base_df['position'] =position
         base_df['height'] =height
         base_df['awards'] =awards
         base_df.to_csv('ncaa_ref/' + player_name + '.csv')
-        time.sleep(5)
+        time.sleep(10)
 
     except Exception as error:
     # handle the exception
-        print("ERROR:", error)
-        print(row['player_name'])
+        print(row['player_name']+ "ERROR:", error)
 
 
 # BASE_URL = 'https://www.sports-reference.com/'
@@ -187,16 +152,3 @@ for index,row in wnba_df[398:].iterrows():
 #     if 'Per Game' in str(table):
 #         player_pg_df = pd.read_html(str(page_html))[0]
 #         player_pg_df = player_pg_df.add_prefix('pg_')
-
-import requests
-from bs4 import BeautifulSoup
-import time
-
-# Add a new column to the dataframe for the correct sports-reference links
-df['Correct Link'] = df['Player Name'].apply(get_correct_link)
-
-# Pause for a second between requests to avoid overwhelming the server
-time.sleep(1)
-
-
-    
