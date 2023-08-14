@@ -22,3 +22,5 @@ node_modules
 /wnba*
 all_players.csv
 all_teams.csv
+*.csv
+*.xlsx*

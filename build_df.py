@@ -83,6 +83,27 @@ cleaned_df = cleaned_df[cleaned_df['pg_season'] == 'Career']
 cleaned_df['conference'] = cleaned_df['pg_conf']
 ncaa_df = ncaa_df.merge(cleaned_df[['name','conference']], on='name', how='left')
 ncaa_df= convert_columns_to_lowercase(ncaa_df)
+
+
+ncaa_df['pg_year_num'] = pd.to_numeric(ncaa_df['pg_season'].str[:4], errors='coerce')
+ncaa_df['pg_year_num'] = pd.to_numeric(ncaa_df['pg_year_num'], errors='coerce')
+
+# Exclude rows with 'Career' as they don't represent individual years
+df_filtered = ncaa_df.dropna(subset=['pg_year_num'])
+
+# Find the first year for each player
+first_year_series = df_filtered.groupby(['name','pg_school'])['pg_year_num'].max()
+
+# Map the first year to the original dataframe
+ncaa_df['key'] = list(zip(ncaa_df['name'], ncaa_df['pg_school']))
+
+# Map the 'key' to the corresponding value in 'first_year_series'
+ncaa_df['last_season'] = ncaa_df['key'].map(first_year_series)
+
+# Optionally, you can drop the 'key' column if it's no longer needed
+ncaa_df.drop(columns=['key'], inplace=True)
+
+
 ncaa_df = ncaa_df.loc[ncaa_df['pg_season'].apply(lambda x: filter_func(str(x),1997))]
 ncaa_df = ncaa_df[ncaa_df['pg_season'] == 'Career']
 ncaa_df.dropna(subset=['tot_pts'],inplace=True)
@@ -175,6 +196,29 @@ wnba_df.to_csv('use_data/all_wnba.csv')
 # CASE STUDY
 ##########################################
 
+
+def add_last_year_column(df, column_name="last_year"):
+    """
+    Add a column to the dataframe indicating each player's first year in the WNBA.
+    
+    Args:
+    - df (pd.DataFrame): The dataset containing player data.
+    - column_name (str): The name of the column to be added for the first year.
+    
+    Returns:
+    - pd.DataFrame: The dataset with the added 'first_year' column.
+    """
+    # Exclude rows with 'Career' as they don't represent individual years
+    df_filtered = df.dropna(subset=['pg_year_num'])
+    
+    # Find the first year for each player
+    first_year_series = df_filtered.groupby('player_name')['pg_year_num'].max()
+    
+    # Map the first year to the original dataframe
+    df[column_name] = df['player_name'].map(first_year_series)
+    
+    return df
+
 folder_path = 'case_study/'
 csv_files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
 dfs = []
@@ -208,20 +252,67 @@ for csv_file in csv_files:
 
 #     dfs.append(df)
 
-ncaa_df = pd.concat(dfs, axis=0, ignore_index=True)
-
-ncaa_df['season_start_year'] = pd.to_numeric(ncaa_df['pg_season'].str[:4], errors='coerce')
-latest_seasons_numeric = ncaa_df.groupby('player_name')['season_start_year'].max()
-players_last_year_2019_numeric = latest_seasons_numeric[latest_seasons_numeric == 2019].index.tolist()
-ncaa_df = ncaa_df[ncaa_df['player_name'].isin(players_last_year_2019_numeric)]
-
+base_ncaa_df = pd.concat(dfs, axis=0, ignore_index=True)
+base_ncaa_df.to_csv('all_ncaa_raw.csv')
+ncaa_df = base_ncaa_df.copy()
+# ncaa_df['name'] = ncaa_df['name'].str.lower()
+# ncaa_df[ncaa_df['name']=='kim smith']
 cleaned_df = fill_pg_conf(ncaa_df)
 cleaned_df = cleaned_df[cleaned_df['pg_season'] == 'Career']
 cleaned_df['conference'] = cleaned_df['pg_conf']
 ncaa_df = ncaa_df.merge(cleaned_df[['name','conference']], on='name', how='left')
 ncaa_df= convert_columns_to_lowercase(ncaa_df)
+ncaa_df = ncaa_df[ncaa_df['pg_school'] != 'Overall']
+
+ncaa_df['pg_year_num'] = pd.to_numeric(ncaa_df['pg_season'].str[:4], errors='coerce')
+ncaa_df['pg_year_num'] = pd.to_numeric(ncaa_df['pg_year_num'], errors='coerce')
+# Exclude rows with 'Career' as they don't represent individual years
+df_filtered = ncaa_df.dropna(subset=['pg_year_num'])
+# Find the first year for each player
+first_year_series = df_filtered.groupby(['name','pg_school'])['pg_year_num'].max()
+
+# Map the first year to the original dataframe
+ncaa_df['key'] = list(zip(ncaa_df['name'], ncaa_df['pg_school']))
+
+# Map the 'key' to the corresponding value in 'first_year_series'
+ncaa_df['last_season'] = ncaa_df['key'].map(first_year_series)
+
+most_recent_class = ncaa_df.groupby(['name','pg_school'])['pg_class'].last()
+
+# Map the most_recent_class Series to the 'name' column in the original DataFrame
+ncaa_df['most_recent_class'] = ncaa_df['key'].map(most_recent_class)
+
+# Optionally, you can drop the 'key' column if it's no longer needed
+ncaa_df.drop(columns=['key'], inplace=True)
+
 ncaa_df = ncaa_df[ncaa_df['pg_season'] == 'Career']
 ncaa_df.dropna(subset=['tot_pts'],inplace=True)
+ncaa_df.drop(columns =['pg_year_num'], axis=1, inplace=True)
+
 # cleaned_df[cleaned_df['name'] =='Tamika Whitmore'].to_excel('test.xlsx')
 # ncaa_df.to_excel('use_data/all_ncaa_updated.xlsx')
-ncaa_df.to_csv('use_data/case_study.csv')
+ncaa_df.to_csv('use_data/full_ncaa_8_12.csv')
+
+
+
+
+# ncaa_df = pd.concat(dfs, axis=0, ignore_index=True)
+
+# ncaa_df['season_start_year'] = pd.to_numeric(ncaa_df['pg_season'].str[:4], errors='coerce')
+# latest_seasons_numeric = ncaa_df.groupby('player_name')['season_start_year'].max()
+# players_last_year_2019_numeric = latest_seasons_numeric[latest_seasons_numeric == 2019].index.tolist()
+# ncaa_df = ncaa_df[ncaa_df['player_name'].isin(players_last_year_2019_numeric)]
+
+# cleaned_df = fill_pg_conf(ncaa_df)
+# cleaned_df = cleaned_df[cleaned_df['pg_season'] == 'Career']
+# cleaned_df['conference'] = cleaned_df['pg_conf']
+# ncaa_df = ncaa_df.merge(cleaned_df[['name','conference']], on='name', how='left')
+# ncaa_df= convert_columns_to_lowercase(ncaa_df)
+# ncaa_df = ncaa_df[ncaa_df['pg_season'] == 'Career']
+# ncaa_df.dropna(subset=['tot_pts'],inplace=True)
+# # cleaned_df[cleaned_df['name'] =='Tamika Whitmore'].to_excel('test.xlsx')
+# # ncaa_df.to_excel('use_data/all_ncaa_updated.xlsx')
+# ncaa_df.to_csv('use_data/case_study.csv')
+
+
+

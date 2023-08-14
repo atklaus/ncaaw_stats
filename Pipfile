@@ -19,6 +19,7 @@ seaborn = "*"
 openpyxl = "*"
 scikit-learn = "*"
 xgboost = "*"
+polars = "*"
 
 [dev-packages]
 

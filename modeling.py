@@ -23,6 +23,7 @@ from sklearn import svm
 from sklearn.model_selection import GridSearchCV
 from sklearn import metrics
 
+
 ####################################
 # Clean Data
 ####################################
@@ -35,19 +36,27 @@ def convert_columns_to_lowercase(df):
     df = df.loc[:, ~df.columns.str.contains('unnamed', case=False)]
 
     return df
+ncaa_df= pd.read_csv('use_data/full_ncaa_8_12.csv')
+# ncaa_df = pd.read_csv('use_data/all_ncaa_updated.csv')
+full_ncaa_df= pd.read_csv('use_data/full_ncaa_8_12.csv')
+ncaa_df = pd.concat([ncaa_df,full_ncaa_df],axis=0)
+ncaa_df.drop_duplicates(keep='first',inplace=True,subset=['player_name','pg_school'])
 
-ncaa_df = pd.read_csv('use_data/all_ncaa_updated.csv')
 wnba_df = pd.read_csv('use_data/all_wnba.csv')
+# wnba_df= wnba_df[wnba_df['debut_year']>=2010]
 model_df = ncaa_df.merge(wnba_df, left_on='name', right_on='player_name', how='left',)
+
 # model_df = pd.read_csv('use_data/case_study.csv')
 model_df.rename(columns={'adv_per_x': 'adv_per_college','adv_per_y':'per_pro','adv_ws/48':'ws_48_pro','player_name_x':'player_name'}, inplace=True)
 model_df = convert_columns_to_lowercase(model_df)
+model_df['college_team'] = model_df['pg_school']
 model_df.drop(columns =['player_name_y','name','pg_school','pg_season','adv_class', 'pg_class', 'adv_school', 'pg_conf','tot_season','tot_school','tot_class'], axis=1, inplace=True)
 model_df.reset_index(drop=True, inplace=True)
 model_df = model_df.dropna(how='all', axis=1)
-model_df.dropna(subset=['ws_48_pro'],inplace=True)
+model_df.dropna(subset=['ws_48_pro'])
 model_df.reset_index(inplace=True, drop=True)
-model_df.to_excel('eda.xlsx')
+# model_df.to_excel('eda.xlsx')
+model_df.to_csv('eda.csv')
 
 ####################################
 # EDA
@@ -87,7 +96,8 @@ model_df_copy = pd.concat([model_df_copy, conf_dummies], axis=1)
 model_df_copy = model_df_copy.replace({True: 1, False: 0})
 model_df = model_df_copy.copy()
 
-model_df.drop(columns=['college_team','conference','player_name','adv_season','position'],inplace=True,axis=0)
+# model_df.drop(columns=['college_team','conference','player_name','adv_season','position'],inplace=True,axis=0)
+model_df.drop(columns=['college_team','conference','adv_season','position'],inplace=True,axis=0)
 
 
 def count_award_occurrences(awards_list, award):
@@ -116,10 +126,11 @@ model_df['DPOY_count'] = model_df['awards'].apply(lambda x: count_award_occurren
 model_df['All_Defense_count'] = model_df['awards'].apply(lambda x: count_award_occurrences(x.split(','), 'All-Defense') if isinstance(x, str) else 0)
 model_df['MOP_count'] = model_df['awards'].apply(lambda x: count_award_occurrences(x.split(','), 'MOP') if isinstance(x, str) else 0)
 model_df['MIP_count'] = model_df['awards'].apply(lambda x: count_award_occurrences(x.split(','), 'MIP') if isinstance(x, str) else 0)
-model_df['award_count'] = model_df['awards'].apply(lambda x: len(x.split(',')))
+model_df['award_count'] = model_df['awards'].apply(lambda x: len(x.split(',')) if isinstance(x, str) else 0)
+
 model_df.drop(columns=['awards'],inplace=True,axis=0)
 
-col_types_remove = ['conference','college_team','position','adv_','pg_','_count']
+col_types_remove = ['college_team','_count']
 # col_types_remove = ['conference','college_team','position','tot_','pg_','_count']
 # col_types_remove = ['conference_','college_team_','adv_','pg_']
 # col_types_remove = ['conference_','college_team_','tot_']
@@ -133,16 +144,16 @@ model_df = model_df.drop(cols_to_drop, axis=1)
 
 all_columns = model_df.columns
 non_categorical_cols = [col for col in all_columns if col not in categorical_cols]
+non_categorical_cols.remove('player_name')
+non_categorical_cols.remove('most_recent_class')
 
 
 for col in non_categorical_cols:
     model_df[col] = pd.to_numeric(model_df[col], errors='coerce')
-model_df.drop(columns=['per_pro'], axis=1, inplace=True)
-model_df.drop(columns=['debut_year'], axis=1, inplace=True)
+model_df.drop(columns=['per_pro','debut_year'], axis=1, inplace=True)
 
 numerical_cols = model_df.select_dtypes(include=['float64', 'int64']).columns
-model_df.to_excel('model_df.xlsx',index=False)
-
+model_df.to_csv('model_df_updated.csv',index=False)
 
 ####################################
 # Impute Missing Values
@@ -168,7 +179,7 @@ model_df['All_Freshman_count'].value_counts()[:10].plot(kind='bar')
 plt.title('Made Conference All Freshman Team')
 plt.xlabel('All Freshman Team')
 plt.ylabel('Count')
-#plt.show()
+plt.show()
 
 # A histogram of the 'pg_pts' column
 plt.figure(figsize=(10,6))
@@ -177,7 +188,7 @@ plt.title('Distribution of Win Shares')
 plt.xlabel('Win Shares')
 plt.ylabel('Frequency')
 plt.xlim([-1, 1])  # adjust the range here
-#plt.show()
+# plt.show()
 
 plt.figure(figsize=(10,6))
 sns.histplot(model_df['height'], kde=True)
@@ -195,7 +206,7 @@ plt.title('Distribution of Points Per Game')
 plt.xlabel('Points Per Game')
 plt.ylabel('Frequency')
 plt.xlim([0, 30])  # adjust the range here
-#plt.show()
+plt.show()
 
 # A boxplot of 'pg_pts' grouped by 'conference'
 plt.figure(figsize=(10,6))
@@ -203,7 +214,7 @@ sns.boxplot(x='conference', y='pg_pts', data=model_df)
 plt.title('Points Per Game Distribution by Conference')
 plt.xticks(rotation=90)  # rotate x-axis labels
 plt.ylim([0, 30])  # adjust the range here
-#plt.show()
+# plt.show()
 
 # Correlation matrix
 corr_mat = model_df.corr()
@@ -218,7 +229,7 @@ plt.scatter(model_df['pg_g'], model_df['pg_gs'])
 plt.xlabel('pg_g')
 plt.ylabel('pg_gs')
 plt.title('pg_g vs pg_gs')
-#plt.show()
+plt.show()
 
 sns.pairplot(model_df)
 #plt.show()
