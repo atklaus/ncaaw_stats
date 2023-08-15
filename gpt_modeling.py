@@ -292,6 +292,7 @@ tuned_summary_df.to_excel(tuned_summary_filename, index=False)
 og_df = pd.read_csv("use_data/full_ncaa_8_12.csv")
 og_df = og_df[(og_df['last_season'] == 2021) & (og_df['most_recent_class'] == 'SR')]
 
+
 wnba_df = pd.read_csv('use_data/all_wnba.csv')
 og_df = og_df[~og_df['player_name'].isin(wnba_df['player_name'])]
 
@@ -320,8 +321,8 @@ pred_df = og_df[["player_name"]].copy()
 pred_df["Predicted_Value"] = predicted_values
 pred_df["Probability_Pos"]  = prob_values[:,1]
 pred_df["Probability_Neg"]  = prob_values[:,0]
-pred_df.sort_values(by=['Probability_Pos'],ascending=False)
-# pred_df.to_excel('')
+pred_df.sort_values(by=['Probability_Pos'],ascending=False,inplace=True)
+pred_df.to_excel('predicted_prob.xlsx')
 
 ############
 # PREDICT
