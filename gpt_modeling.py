@@ -20,24 +20,22 @@ from xgboost import XGBClassifier
 #########################
 # SET RUN TYPE
 #########################
-n=10
-tuned_summary_filename = "new_tot_model_evaluation_11_feat.xlsx"
+n=8
+# tuned_summary_filename = "new_tot_model_evaluation_11_feat.xlsx"
 # Load the data from the provided Excel file
 df = pd.read_excel("model_df.xlsx")
 # df = pd.read_csv("model_df_updated.csv")
 target_variable = 'ws_48_pro'
-# cols_to_keep = [col for col in df.columns if col.startswith('tot_')] + ['ws_48_pro']
-# df = df[cols_to_keep]
 
 #########################
 # MODEL
 #########################
 
-# Load the data
+# # Load the data
 # df = pd.read_csv("model_df_updated.csv")
 target_variable = 'ws_48_pro'
 
-# Fill NaN values only for 'ws_48_pro' with 0 and convert to binary classes
+# # Fill NaN values only for 'ws_48_pro' with 0 and convert to binary classes
 df['ws_48_pro'].fillna(0, inplace=True)
 df['ws_48_pro'] = (df['ws_48_pro'] > 0).astype(int)
 # balanced_data = pd.DataFrame()
@@ -49,7 +47,7 @@ df['ws_48_pro'] = (df['ws_48_pro'] > 0).astype(int)
 #     minority = data_year[data_year['ws_48_pro'] == 1]
 
 #     # Downsample and upsample within this year
-#     majority_downsampled = resample(majority, replace=False, n_samples=min(len(majority), 6000), random_state=42)  # Example size
+#     majority_downsampled = resample(majority, replace=False, n_samples=min(len(majority), 2000), random_state=42)  # Example size
 #     minority_upsampled = resample(minority, replace=True, n_samples=len(majority_downsampled), random_state=42)
 
 #     balanced_year_data = pd.concat([majority_downsampled, minority])
@@ -67,15 +65,24 @@ df['ws_48_pro'] = (df['ws_48_pro'] > 0).astype(int)
 
 # # Combine downsampled majority class and upsampled minority class
 # balanced_data = pd.concat([data_majority_downsampled, data_minority_upsampled])
+# df = balanced_data.copy()
+# df = df.select_dtypes(exclude=['object'])
 
 # Separate features and target variable
 X = df.drop(columns=[target_variable])
 y= df[target_variable]
 
+# top_features = ['adv_drb%', 'adv_trb%', 'adv_ast%', 'pg_fg', 'adv_orb%', 'pg_fg%', 'adv_blk%', 'pg_sos']
+# top_features = ['pg_2p%', 'adv_stl%', 'pg_fg%', 'pg_pts', 'pg_sos', 'adv_trb%', 'adv_ast%', 'pg_tov']
+# X= X[top_features]
 # Impute missing values with median
 imputer = SimpleImputer(strategy='median')
 X_imputed = imputer.fit_transform(X)
+# X_imputed = imputer.fit_transform(X[top_features])
 X_resampled = X_imputed
+
+# joblib.dump(imputer, 'imputer.pkl')
+
 
 # Apply SMOTE to balance the classes
 # smote = SMOTE(sampling_strategy={1: samples}, random_state=42)
@@ -90,10 +97,15 @@ X_resampled_dropped_corr = pd.DataFrame(X_resampled).drop(columns=to_drop)
 # Split the data into training and test sets
 X_train, X_test, y_train, y_test = train_test_split(X_resampled_dropped_corr, y, test_size=0.2, random_state=42)
 
-# Standardize the data
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+# # Standardize the data
+# scaler = StandardScaler()
+# X_train = scaler.fit_transform(X_train)
+# X_train = scaler.fit_transform(X[top_features])
+
+# X_test = scaler.transform(X_test)
+# import joblib
+
+# joblib.dump(scaler, 'scaler.pkl')
 
 # Run Random Forest to check feature importances
 model = RandomForestClassifier(random_state=42)
@@ -103,10 +115,11 @@ model.fit(X_train, y_train)
 feature_importances = pd.DataFrame(model.feature_importances_, index=X_resampled_dropped_corr.columns, columns=['importance'])
 top_features_idx = feature_importances.nlargest(8, 'importance').index
 top_features_indices = [X_resampled_dropped_corr.columns.get_loc(feature) for feature in top_features_idx]
-X_train_top = X_train[:, top_features_indices]
-X_test_top = X_test[:, top_features_indices]
-
 top_features = list(X.columns[top_features_indices])
+
+X_train_top = X_train[top_features_idx]
+X_test_top = X_test[top_features_idx]
+
 
 # Extract feature importances
 feature_importances = model.feature_importances_
@@ -238,6 +251,14 @@ conf_matrix = confusion_matrix(y_test, y_pred_selected)
 conf_matrix_df = pd.DataFrame(conf_matrix, columns=['Predicted Negative', 'Predicted Positive'], index=['Actual Negative', 'Actual Positive'])
 conf_matrix_df
 
+import joblib
+joblib.dump(rf_grid, 'wnba_success.pkl')
+
+
+import pickle
+
+
+
 # Logistic Regression
 logreg_tuned = LogisticRegression(**logreg_best_params, random_state=42, max_iter=5000)
 logreg_metrics_tuned = evaluate_model(logreg_tuned, X_train, y_train, X_test, y_test)
@@ -290,8 +311,8 @@ tuned_summary_df.to_excel(tuned_summary_filename, index=False)
 
 # og_df = pd.read_csv('use_data/case_study.csv')
 og_df = pd.read_csv("use_data/full_ncaa_8_12.csv")
-og_df = og_df[(og_df['last_season'] == 2021) & (og_df['most_recent_class'] == 'SR')]
-
+# og_df = og_df[(og_df['last_season'] > 2021) & (og_df['most_recent_class'] == 'SR')]
+og_df = og_df[(og_df['last_season'] > 2021) ]
 
 wnba_df = pd.read_csv('use_data/all_wnba.csv')
 og_df = og_df[~og_df['player_name'].isin(wnba_df['player_name'])]
@@ -311,8 +332,15 @@ for column in missing_values.index:
     if missing_values[column] > 0:
         case_study_df[column].fillna(case_study_df[column].median(), inplace=True)
 
-scaler = StandardScaler()
-case_study_df = scaler.fit_transform(case_study_df)
+# scaler = StandardScaler()
+# case_study_df = scaler.fit_transform(case_study_df)
+import joblib
+# joblib.dump(scaler, 'scaler.pkl')
+# joblib.dump(rf_tuned, 'wnba_success.pkl')
+rf_tuned = joblib.load('wnba_success.pkl')
+
+# with open('wnba_success.pkl', 'rb') as model_file:
+#     rf_tuned = pickle.load(model_file)
 
 predicted_values = rf_tuned.predict(case_study_df)
 prob_values = rf_tuned.predict_proba(case_study_df)
